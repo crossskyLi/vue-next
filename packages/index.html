@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+</head>
+<body>
+    &#x 4e2d;&#x 56fd;
+  <div id="aaa"ccc="ccc" :a="222">
+    <Comp @change="handle" :abc = "ddd" v-bind:ccc= "ddd"></Comp>
+  <div id="bbb" v-bind="11">{{myData}}</div>
+  <!-- <div>123123</div> -->
+</div>
+</body>
+</html>
+
+<script type="module">
+  import {compile} from "./vue/dist/vue.esm-browser.js"
+  const template = document.body.innerHTML;
+  compile(template)
+  console.log(compile(template))
+</script>

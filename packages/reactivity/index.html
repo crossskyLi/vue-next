@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <script src="./dist/reactivity.global.js"></script>
+  <script type="module">
+    const {
+      ITERATE_KEY,
+      computed,
+      effect,
+      isReactive,
+      isReadonly,
+      isRef,
+      lock,
+      markNonReactive,
+      markReadonly,
+      pauseTracking,
+      reactive,
+      readonly,
+      ref,
+      resumeTracking,
+      stop,
+      toRaw,
+      toRefs,
+      unlock
+    } = VueObserver;
+    debugger;
+    const reactObj = reactive({ a: 1 });
+    reactObj.b = 1222;
+    console.log(reactObj.a)
+    console.log(reactObj)
+    Reflect.set(reactObj, 'a', 110)
+    Reflect.deleteProperty(reactObj, 'b', 120)
+    console.log(reactObj.a)
+    console.log(reactObj)
+
+    const a = new Proxy({b: 1},{get:function(target,key){
+      console.log(`a - ${key}被获取`)
+      return target[key]
+    }})
+    console.log(a.b)
+
+
+    const count = ref('222')
+    console.log(count)
+    console.log(count.value)
+
+  </script>
+</head>
+
+<body>
+  aa
+</body>
+
+</html>
+
+<script>
+</script>

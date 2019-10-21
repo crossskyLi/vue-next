@@ -105,10 +105,16 @@ export function advancePositionWithMutation(
   source: string,
   numberOfCharacters: number = source.length
 ): Position {
+  /**
+   *
+   *  \n (这里会被计算几行)<div></div>
+   *  \n const a = 2;
+   */
   let linesCount = 0
   let lastNewLinePos = -1
   for (let i = 0; i < numberOfCharacters; i++) {
     if (source.charCodeAt(i) === 10 /* newline char code */) {
+      // 换行符的 ASCII 码
       linesCount++
       lastNewLinePos = i
     }
@@ -117,7 +123,7 @@ export function advancePositionWithMutation(
   pos.offset += numberOfCharacters
   pos.line += linesCount
   pos.column =
-    lastNewLinePos === -1
+    lastNewLinePos === -1 // 没有新起行,用原来的列的位置加上字符长度
       ? pos.column + numberOfCharacters
       : Math.max(1, numberOfCharacters - lastNewLinePos)
 

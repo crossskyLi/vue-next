@@ -8,6 +8,9 @@ function compileToFunction(
   template: string,
   options?: CompilerOptions
 ): RenderFunction {
+  // 进来先编译 原来的template 变成ast => node
+  // 这里调用的是 compile-dom 的compile
+  // compile-dom 对compile-core 做了一次二次封装，注入了一些用户参数和默认参数
   const { code } = compile(template, {
     hoistStatic: true,
     ...options

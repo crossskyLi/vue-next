@@ -77,18 +77,18 @@ interface ParserContext {
 }
 
 export function parse(content: string, options: ParserOptions = {}): RootNode {
-  const context = createParserContext(content, options)
-  const start = getCursor(context)
+  const context = createParserContext(content, options) // 创建一个编译器的上下文
+  const start = getCursor(context) // 获取当前编译起点
 
   return {
     type: NodeTypes.ROOT,
-    children: parseChildren(context, TextModes.DATA, []),
+    children: parseChildren(context, TextModes.DATA, []), // 孩子节点编译
     helpers: [],
     components: [],
     directives: [],
     hoists: [],
     codegenNode: undefined,
-    loc: getSelection(context, start)
+    loc: getSelection(context, start) // 疑惑
   }
 }
 
@@ -98,18 +98,18 @@ function createParserContext(
 ): ParserContext {
   return {
     options: {
-      ...defaultParserOptions,
+      ...defaultParserOptions, // 默认编译选项
       ...options
     },
     column: 1,
     line: 1,
     offset: 0,
-    originalSource: content,
-    source: content,
+    originalSource: content, // 源
+    source: content, // 这个应该会被改变
     maxCRNameLength: Object.keys(
       options.namedCharacterReferences ||
         defaultParserOptions.namedCharacterReferences
-    ).reduce((max, name) => Math.max(max, name.length), 0)
+    ).reduce((max, name) => Math.max(max, name.length), 0) // 当前最大 字符长度。 用来干嘛，疑惑
   }
 }
 
@@ -118,25 +118,30 @@ function parseChildren(
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
-  const parent = last(ancestors)
+  const parent = last(ancestors) // 获取父级 这里应该是拿到数组的最后一个元素，数组的排列应该是 按祖先级别来排列
   const ns = parent ? parent.ns : Namespaces.HTML
   const nodes: TemplateChildNode[] = []
 
   while (!isEnd(context, mode, ancestors)) {
+    // 是否是结束  一个 while 循环
     __DEV__ && assert(context.source.length > 0)
     const s = context.source
     let node: TemplateChildNode | TemplateChildNode[] | undefined = undefined
 
     if (startsWith(s, context.options.delimiters[0])) {
       // '{{'
-      node = parseInterpolation(context, mode)
+      node = parseInterpolation(context, mode) // 双向绑定插入解析
     } else if (mode === TextModes.DATA && s[0] === '<') {
       // https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
       if (s.length === 1) {
+        // 如果只有一个 <  报错。
+        // 这里应该是个全局报错器，
+        // 这里加了上下文，和报错编码
         emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 1)
       } else if (s[1] === '!') {
         // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
         if (startsWith(s, '<!--')) {
+          // 注释代码编译
           node = parseComment(context)
         } else if (startsWith(s, '<!DOCTYPE')) {
           // Ignore DOCTYPE by a limitation.
@@ -149,18 +154,23 @@ function parseChildren(
             node = parseBogusComment(context)
           }
         } else {
+          // 不滿足的話就報錯
           emitError(context, ErrorCodes.INCORRECTLY_OPENED_COMMENT)
           node = parseBogusComment(context)
         }
       } else if (s[1] === '/') {
+        // 如果第二個字符是 / 对不同的情况,报不同的错误
         // https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state
         if (s.length === 2) {
+          // 只有两个的长度
           emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 2)
         } else if (s[2] === '>') {
+          // <> 丢失了标签名字
           emitError(context, ErrorCodes.MISSING_END_TAG_NAME, 2)
           advanceBy(context, 3)
           continue
         } else if (/[a-z]/i.test(s[2])) {
+          // </[a-z]> 无效的标签名字
           emitError(context, ErrorCodes.X_INVALID_END_TAG)
           parseTag(context, TagType.End, parent)
           continue
@@ -383,12 +393,14 @@ function parseTag(
   const props = []
   const ns = context.options.getNamespace(tag, parent)
 
-  let tagType = ElementTypes.ELEMENT
+  let tagType = ElementTypes.ELEMENT // 普通标签
   if (tag === 'slot') tagType = ElementTypes.SLOT
+  // <slot>
   else if (tag === 'template') tagType = ElementTypes.TEMPLATE
-  else if (/[A-Z-]/.test(tag)) tagType = ElementTypes.COMPONENT
+  // <template></template>
+  else if (/[A-Z-]/.test(tag)) tagType = ElementTypes.COMPONENT // 组件类型 连接符和大小写
 
-  advanceBy(context, match[0].length)
+  advanceBy(context, match[0].length) // 删掉已经解析的source
   advanceSpaces(context)
 
   // Attributes.
@@ -456,11 +468,13 @@ function parseAttribute(
   const name = match[0]
 
   if (nameSet.has(name)) {
+    //已有属性
     emitError(context, ErrorCodes.DUPLICATE_ATTRIBUTE)
   }
   nameSet.add(name)
 
   if (name[0] === '=') {
+    // 以 = 开头则报错
     emitError(context, ErrorCodes.UNEXPECTED_EQUALS_SIGN_BEFORE_ATTRIBUTE_NAME)
   }
   {
@@ -487,16 +501,17 @@ function parseAttribute(
     | undefined = undefined
 
   if (/^[\t\r\n\f ]*=/.test(context.source)) {
-    advanceSpaces(context)
-    advanceBy(context, 1)
-    advanceSpaces(context)
-    value = parseAttributeValue(context)
+    advanceSpaces(context) // 去掉 空白
+    advanceBy(context, 1) // 从=后开始
+    advanceSpaces(context) // 去掉=后的空白
+    value = parseAttributeValue(context) // 解析attribute 的值
     if (!value) {
       emitError(context, ErrorCodes.MISSING_ATTRIBUTE_VALUE)
     }
   }
   const loc = getSelection(context, start)
 
+  // v- 指令解析, : 解析, # @ 事件解析
   if (/^(v-|:|@|#)/.test(name)) {
     const match = /(?:^v-([a-z0-9-]+))?(?:(?::|^@|^#)([^\.]+))?(.+)?$/i.exec(
       name
@@ -592,11 +607,13 @@ function parseAttributeValue(
   const quote = context.source[0]
   const isQuoted = quote === `"` || quote === `'`
   if (isQuoted) {
+    // 引号包裹
     // Quoted value.
-    advanceBy(context, 1)
+    advanceBy(context, 1) // 去掉引号
 
-    const endIndex = context.source.indexOf(quote)
+    const endIndex = context.source.indexOf(quote) // 下一个引号位置
     if (endIndex === -1) {
+      // 没有找到下一个引号 ? 这里处理的是什么情况
       content = parseTextData(
         context,
         context.source.length,
@@ -607,6 +624,7 @@ function parseAttributeValue(
       advanceBy(context, 1)
     }
   } else {
+    // 非引号包裹
     // Unquoted
     const match = /^[^\t\r\n\f >]+/.exec(context.source)
     if (!match) {
@@ -681,9 +699,9 @@ function parseText(context: ParserContext, mode: TextModes): TextNode {
       context.source.length
     ].filter(n => n !== -1)
   )
-  __DEV__ && assert(endIndex > 0)
+  __DEV__ && assert(endIndex > 0) // 断言,应该是要一定能找到的
 
-  const start = getCursor(context)
+  const start = getCursor(context) // 获取当前位置
   const content = parseTextData(context, endIndex, mode)
 
   return {
@@ -710,7 +728,7 @@ function parseTextData(
   }
 
   // DATA or RCDATA. Entity decoding required.
-  const end = context.offset + length
+  const end = context.offset + length // 解析的结束位置
   let text: string = ''
 
   while (context.offset < end) {
@@ -724,7 +742,7 @@ function parseTextData(
 
     // Advance to the "&".
     text += context.source.slice(0, head.index)
-    advanceBy(context, head.index)
+    advanceBy(context, head.index) // 步进
 
     if (head[0] === '&') {
       // Named character reference.
@@ -853,7 +871,7 @@ function advanceBy(context: ParserContext, numberOfCharacters: number): void {
   advancePositionWithMutation(context, source, numberOfCharacters)
   context.source = source.slice(numberOfCharacters)
 }
-
+// 删掉 制表符 换行符(windows) 换行符(unix)  换页符
 function advanceSpaces(context: ParserContext): void {
   const match = /^[\t\r\n\f ]+/.exec(context.source)
   if (match) {

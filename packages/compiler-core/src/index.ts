@@ -31,7 +31,7 @@ export function baseCompile(
       onError(createCompilerError(ErrorCodes.X_MODULE_MODE_NOT_SUPPORTED))
     }
   }
-
+  // 通过 当前目录下的 parse 模块来编译出 ast
   const ast = isString(template) ? parse(template, options) : template
 
   const prefixIdentifiers =
