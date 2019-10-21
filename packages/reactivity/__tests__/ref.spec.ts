@@ -63,6 +63,13 @@ describe('reactivity/ref', () => {
     expect(dummy3).toBe(3)
   })
 
+  it('should unwrap nested ref in types', () => {
+    const a = ref(0)
+    const b = ref(a)
+
+    expect(typeof (b.value + 1)).toBe('number')
+  })
+
   it('should unwrap nested values in types', () => {
     const a = {
       b: ref(0)
@@ -71,6 +78,25 @@ describe('reactivity/ref', () => {
     const c = ref(a)
 
     expect(typeof (c.value.b + 1)).toBe('number')
+  })
+
+  it('should properly unwrap ref types nested inside arrays', () => {
+    const arr = ref([1, ref(1)]).value
+    // should unwrap to number[]
+    arr[0]++
+    arr[1]++
+
+    const arr2 = ref([1, new Map<string, any>(), ref('1')]).value
+    const value = arr2[0]
+    if (typeof value === 'string') {
+      value + 'foo'
+    } else if (typeof value === 'number') {
+      value + 1
+    } else {
+      // should narrow down to Map type
+      // and not contain any Ref type
+      value.has('foo')
+    }
   })
 
   test('isRef', () => {

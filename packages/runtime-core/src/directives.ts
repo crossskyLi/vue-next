@@ -11,8 +11,8 @@ return applyDirectives(h(comp), [
 ])
 */
 
-import { VNode, cloneVNode } from './vnode'
-import { extend, isArray, isFunction } from '@vue/shared'
+import { VNode } from './vnode'
+import { isArray, isFunction, EMPTY_OBJ, makeMap } from '@vue/shared'
 import { warn } from './warning'
 import { ComponentInternalInstance } from './component'
 import { currentRenderingInstance } from './componentRenderUtils'
@@ -21,31 +21,45 @@ import { ComponentPublicInstance } from './componentProxy'
 
 export interface DirectiveBinding {
   instance: ComponentPublicInstance | null
-  value?: any
-  oldValue?: any
+  value: any
+  oldValue: any
   arg?: string
-  modifiers?: DirectiveModifiers
+  modifiers: DirectiveModifiers
 }
 
-export type DirectiveHook = (
-  el: any,
+export type DirectiveHook<T = any> = (
+  el: T,
   binding: DirectiveBinding,
-  vnode: VNode,
-  prevVNode: VNode | null
+  vnode: VNode<any, T>,
+  prevVNode: VNode<any, T> | null
 ) => void
 
-export interface Directive {
-  beforeMount?: DirectiveHook
-  mounted?: DirectiveHook
-  beforeUpdate?: DirectiveHook
-  updated?: DirectiveHook
-  beforeUnmount?: DirectiveHook
-  unmounted?: DirectiveHook
+export interface ObjectDirective<T = any> {
+  beforeMount?: DirectiveHook<T>
+  mounted?: DirectiveHook<T>
+  beforeUpdate?: DirectiveHook<T>
+  updated?: DirectiveHook<T>
+  beforeUnmount?: DirectiveHook<T>
+  unmounted?: DirectiveHook<T>
 }
+
+export type FunctionDirective<T = any> = DirectiveHook<T>
+
+export type Directive<T = any> = ObjectDirective<T> | FunctionDirective<T>
 
 type DirectiveModifiers = Record<string, boolean>
 
 const valueCache = new WeakMap<Directive, WeakMap<any, any>>()
+
+const isBuiltInDirective = /*#__PURE__*/ makeMap(
+  'bind,cloak,else-if,else,for,html,if,model,on,once,pre,show,slot,text'
+)
+
+export function validateDirectiveName(name: string) {
+  if (isBuiltInDirective(name)) {
+    warn('Do not use built-in directive ids as custom directive id: ' + name)
+  }
+}
 
 function applyDirective(
   props: Record<any, any>,
@@ -53,16 +67,24 @@ function applyDirective(
   directive: Directive,
   value?: any,
   arg?: string,
-  modifiers?: DirectiveModifiers
+  modifiers: DirectiveModifiers = EMPTY_OBJ
 ) {
   let valueCacheForDir = valueCache.get(directive)!
   if (!valueCacheForDir) {
     valueCacheForDir = new WeakMap<VNode, any>()
     valueCache.set(directive, valueCacheForDir)
   }
+
+  if (isFunction(directive)) {
+    directive = {
+      mounted: directive,
+      updated: directive
+    } as ObjectDirective
+  }
+
   for (const key in directive) {
-    const hook = directive[key as keyof Directive]!
-    const hookKey = `vnode` + key[0].toUpperCase() + key.slice(1)
+    const hook = directive[key as keyof ObjectDirective]!
+    const hookKey = `onVnode` + key[0].toUpperCase() + key.slice(1)
     const vnodeHook = (vnode: VNode, prevVNode: VNode | null) => {
       let oldValue
       if (prevVNode != null) {
@@ -98,11 +120,10 @@ export type DirectiveArguments = Array<
   | [Directive, any, string, DirectiveModifiers]
 >
 
-export function applyDirectives(vnode: VNode, directives: DirectiveArguments) {
+export function withDirectives(vnode: VNode, directives: DirectiveArguments) {
   const instance = currentRenderingInstance
   if (instance !== null) {
-    vnode = cloneVNode(vnode)
-    vnode.props = vnode.props != null ? extend({}, vnode.props) : {}
+    vnode.props = vnode.props || {}
     for (let i = 0; i < directives.length; i++) {
       const [dir, value, arg, modifiers] = directives[i]
       applyDirective(vnode.props, instance, dir, value, arg, modifiers)

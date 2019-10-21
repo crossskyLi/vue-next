@@ -23,7 +23,7 @@ import {
   FRAGMENT,
   RENDER_LIST,
   RENDER_SLOT,
-  APPLY_DIRECTIVES
+  WITH_DIRECTIVES
 } from '../../src/runtimeHelpers'
 import { PatchFlags } from '@vue/runtime-dom'
 import { createObjectMatcher, genFlagText } from '../testUtils'
@@ -219,7 +219,7 @@ describe('compiler: v-for', () => {
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: ErrorCodes.X_FOR_NO_EXPRESSION
+          code: ErrorCodes.X_V_FOR_NO_EXPRESSION
         })
       )
     })
@@ -231,7 +231,7 @@ describe('compiler: v-for', () => {
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: ErrorCodes.X_FOR_MALFORMED_EXPRESSION
+          code: ErrorCodes.X_V_FOR_MALFORMED_EXPRESSION
         })
       )
     })
@@ -243,7 +243,7 @@ describe('compiler: v-for', () => {
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: ErrorCodes.X_FOR_MALFORMED_EXPRESSION
+          code: ErrorCodes.X_V_FOR_MALFORMED_EXPRESSION
         })
       )
     })
@@ -255,7 +255,7 @@ describe('compiler: v-for', () => {
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: ErrorCodes.X_FOR_MALFORMED_EXPRESSION
+          code: ErrorCodes.X_V_FOR_MALFORMED_EXPRESSION
         })
       )
     })
@@ -267,7 +267,7 @@ describe('compiler: v-for', () => {
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: ErrorCodes.X_FOR_MALFORMED_EXPRESSION
+          code: ErrorCodes.X_V_FOR_MALFORMED_EXPRESSION
         })
       )
     })
@@ -859,7 +859,7 @@ describe('compiler: v-for', () => {
           { callee: OPEN_BLOCK },
           // should wrap applyDirectives() around createBlock()
           {
-            callee: APPLY_DIRECTIVES,
+            callee: WITH_DIRECTIVES,
             arguments: [
               { callee: CREATE_BLOCK },
               { type: NodeTypes.JS_ARRAY_EXPRESSION }

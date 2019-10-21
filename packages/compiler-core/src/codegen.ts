@@ -16,7 +16,8 @@ import {
   SimpleExpressionNode,
   FunctionExpression,
   SequenceExpression,
-  ConditionalExpression
+  ConditionalExpression,
+  CacheExpression
 } from './ast'
 import { SourceMapGenerator, RawSourceMap } from 'source-map'
 import {
@@ -33,8 +34,7 @@ import {
   COMMENT,
   helperNameMap,
   RESOLVE_COMPONENT,
-  RESOLVE_DIRECTIVE,
-  RuntimeHelper
+  RESOLVE_DIRECTIVE
 } from './runtimeHelpers'
 
 type CodegenNode = TemplateChildNode | JSChildNode
@@ -74,7 +74,7 @@ export interface CodegenContext extends Required<CodegenOptions> {
   offset: number
   indentLevel: number
   map?: SourceMapGenerator
-  helper(key: RuntimeHelper): string
+  helper(key: symbol): string
   push(code: string, node?: CodegenNode, openOnly?: boolean): void
   resetMapping(loc: SourceLocation): void
   indent(): void
@@ -212,11 +212,14 @@ export function generate(
         // to provide the helper here.
         if (ast.hoists.length) {
           push(`const _${helperNameMap[CREATE_VNODE]} = Vue.createVNode\n`)
+          if (ast.helpers.includes(COMMENT)) {
+            push(`const _${helperNameMap[COMMENT]} = Vue.Comment\n`)
+          }
         }
       }
     }
     genHoists(ast.hoists, context)
-    context.newline()
+    newline()
     push(`return `)
   } else {
     // generate import statements for helpers
@@ -224,7 +227,7 @@ export function generate(
       push(`import { ${ast.helpers.map(helper).join(', ')} } from "vue"\n`)
     }
     genHoists(ast.hoists, context)
-    context.newline()
+    newline()
     push(`export default `)
   }
 
@@ -248,6 +251,10 @@ export function generate(
     }
   } else {
     push(`const _ctx = this`)
+    if (ast.cached > 0) {
+      newline()
+      push(`const _cache = _ctx.$cache`)
+    }
     newline()
   }
 
@@ -338,7 +345,7 @@ function genNodeListAsArray(
 }
 
 function genNodeList(
-  nodes: (string | RuntimeHelper | CodegenNode | TemplateChildNode[])[],
+  nodes: (string | symbol | CodegenNode | TemplateChildNode[])[],
   context: CodegenContext,
   multilines: boolean = false
 ) {
@@ -363,10 +370,7 @@ function genNodeList(
   }
 }
 
-function genNode(
-  node: CodegenNode | RuntimeHelper | string,
-  context: CodegenContext
-) {
+function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   if (isString(node)) {
     context.push(node)
     return
@@ -419,6 +423,9 @@ function genNode(
       break
     case NodeTypes.JS_CONDITIONAL_EXPRESSION:
       genConditionalExpression(node, context)
+      break
+    case NodeTypes.JS_CACHE_EXPRESSION:
+      genCacheExpression(node, context)
       break
     /* istanbul ignore next */
     default:
@@ -488,7 +495,7 @@ function genComment(node: CommentNode, context: CodegenContext) {
   if (__DEV__) {
     const { push, helper } = context
     push(
-      `${helper(CREATE_VNODE)}(${helper(COMMENT)}, 0, ${JSON.stringify(
+      `${helper(CREATE_VNODE)}(${helper(COMMENT)}, null, ${JSON.stringify(
         node.content
       )})`,
       node
@@ -611,5 +618,11 @@ function genSequenceExpression(
 ) {
   context.push(`(`)
   genNodeList(node.expressions, context)
+  context.push(`)`)
+}
+
+function genCacheExpression(node: CacheExpression, context: CodegenContext) {
+  context.push(`_cache[${node.index}] || (_cache[${node.index}] = `)
+  genNode(node.value, context)
   context.push(`)`)
 }

@@ -29,6 +29,7 @@ export { getCurrentInstance } from './component'
 
 // For custom renderers
 export { createRenderer } from './createRenderer'
+export { warn } from './warning'
 export {
   handleError,
   callWithErrorHandling,
@@ -37,8 +38,12 @@ export {
 
 // Internal, for compiler generated code
 // should sync with '@vue/compiler-core/src/runtimeConstants.ts'
-export { applyDirectives } from './directives'
-export { resolveComponent, resolveDirective } from './helpers/resolveAssets'
+export { withDirectives } from './directives'
+export {
+  resolveComponent,
+  resolveDirective,
+  resolveDynamicComponent
+} from './helpers/resolveAssets'
 export { renderList } from './helpers/renderList'
 export { toString } from './helpers/toString'
 export { toHandlers } from './helpers/toHandlers'
@@ -80,6 +85,10 @@ export {
   Directive,
   DirectiveBinding,
   DirectiveHook,
+  ObjectDirective,
+  FunctionDirective,
   DirectiveArguments
 } from './directives'
 export { SuspenseBoundary } from './suspense'
+
+export const version = __VERSION__

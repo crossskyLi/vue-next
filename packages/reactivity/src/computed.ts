@@ -1,14 +1,13 @@
-import { effect, ReactiveEffect, activeReactiveEffectStack } from './effect'
-import { Ref, refSymbol, UnwrapNestedRefs } from './ref'
-import { isFunction } from '@vue/shared'
+import { effect, ReactiveEffect, effectStack } from './effect'
+import { Ref, UnwrapRef } from './ref'
+import { isFunction, NOOP } from '@vue/shared'
 
-export interface ComputedRef<T> extends Ref<T> {
-  readonly value: UnwrapNestedRefs<T>
-  readonly effect: ReactiveEffect
+export interface ComputedRef<T> extends WritableComputedRef<T> {
+  readonly value: UnwrapRef<T>
 }
 
 export interface WritableComputedRef<T> extends Ref<T> {
-  readonly effect: ReactiveEffect
+  readonly effect: ReactiveEffect<T>
 }
 
 export interface WritableComputedOptions<T> {
@@ -28,9 +27,11 @@ export function computed<T>(
     ? (getterOrOptions as (() => T))
     : (getterOrOptions as WritableComputedOptions<T>).get
   const setter = isReadonly
-    ? () => {
-        // TODO warn attempting to mutate readonly computed value
-      }
+    ? __DEV__
+      ? () => {
+          console.warn('Write operation failed: computed value is readonly')
+        }
+      : NOOP
     : (getterOrOptions as WritableComputedOptions<T>).set
 
   let dirty = true
@@ -45,7 +46,7 @@ export function computed<T>(
     }
   })
   return {
-    [refSymbol]: true,
+    _isRef: true,
     // expose effect so computed can be stopped
     effect: runner,
     get value() {
@@ -66,15 +67,15 @@ export function computed<T>(
 }
 
 function trackChildRun(childRunner: ReactiveEffect) {
-  const parentRunner =
-    activeReactiveEffectStack[activeReactiveEffectStack.length - 1]
-  if (parentRunner) {
-    for (let i = 0; i < childRunner.deps.length; i++) {
-      const dep = childRunner.deps[i]
-      if (!dep.has(parentRunner)) {
-        dep.add(parentRunner)
-        parentRunner.deps.push(dep)
-      }
+  if (effectStack.length === 0) {
+    return
+  }
+  const parentRunner = effectStack[effectStack.length - 1]
+  for (let i = 0; i < childRunner.deps.length; i++) {
+    const dep = childRunner.deps[i]
+    if (!dep.has(parentRunner)) {
+      dep.add(parentRunner)
+      parentRunner.deps.push(dep)
     }
   }
 }

@@ -15,7 +15,9 @@ declare global {
 window.init = () => {
   const monaco = window.monaco
   const persistedState = JSON.parse(
-    decodeURIComponent(window.location.hash.slice(1)) || `{}`
+    decodeURIComponent(window.location.hash.slice(1)) ||
+      localStorage.getItem('state') ||
+      `{}`
   )
 
   Object.assign(compilerOptions, persistedState.options)
@@ -64,13 +66,13 @@ window.init = () => {
 
   function reCompile() {
     const src = editor.getValue()
-    // every time we re-compile, persist current state to URL
-    window.location.hash = encodeURIComponent(
-      JSON.stringify({
-        src,
-        options: compilerOptions
-      })
-    )
+    // every time we re-compile, persist current state
+    const state = JSON.stringify({
+      src,
+      options: compilerOptions
+    })
+    localStorage.setItem('state', state)
+    window.location.hash = encodeURIComponent(state)
     const res = compileCode(src)
     if (res) {
       output.setValue(res)
@@ -211,12 +213,12 @@ function debounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number = 300
 ): T {
-  let prevTimer: NodeJS.Timeout | null = null
+  let prevTimer: number | null = null
   return ((...args: any[]) => {
     if (prevTimer) {
       clearTimeout(prevTimer)
     }
-    prevTimer = setTimeout(() => {
+    prevTimer = window.setTimeout(() => {
       fn(...args)
       prevTimer = null
     }, delay)

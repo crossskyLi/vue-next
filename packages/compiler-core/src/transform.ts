@@ -13,7 +13,9 @@ import {
   ElementTypes,
   ElementCodegenNode,
   ComponentCodegenNode,
-  createCallExpression
+  createCallExpression,
+  CacheExpression,
+  createCacheExpression
 } from './ast'
 import { isString, isArray } from '@vue/shared'
 import { CompilerError, defaultOnError } from './errors'
@@ -22,9 +24,8 @@ import {
   COMMENT,
   CREATE_VNODE,
   FRAGMENT,
-  RuntimeHelper,
   helperNameMap,
-  APPLY_DIRECTIVES,
+  WITH_DIRECTIVES,
   CREATE_BLOCK
 } from './runtimeHelpers'
 import { isVSlot, createBlockExpression } from './utils'
@@ -46,10 +47,15 @@ export type NodeTransform = (
 export type DirectiveTransform = (
   dir: DirectiveNode,
   node: ElementNode,
-  context: TransformContext
-) => {
-  props: Property | Property[]
-  needRuntime: boolean
+  context: TransformContext,
+  // a platform specific compiler can import the base transform and augment
+  // it by passing in this optional argument.
+  augmentor?: (ret: DirectiveTransformResult) => DirectiveTransformResult
+) => DirectiveTransformResult
+
+export interface DirectiveTransformResult {
+  props: Property[]
+  needRuntime: boolean | symbol
 }
 
 // A structural directive transform is a technically a NodeTransform;
@@ -65,15 +71,17 @@ export interface TransformOptions {
   directiveTransforms?: { [name: string]: DirectiveTransform }
   prefixIdentifiers?: boolean
   hoistStatic?: boolean
+  cacheHandlers?: boolean
   onError?: (error: CompilerError) => void
 }
 
 export interface TransformContext extends Required<TransformOptions> {
   root: RootNode
-  helpers: Set<RuntimeHelper>
+  helpers: Set<symbol>
   components: Set<string>
   directives: Set<string>
   hoists: JSChildNode[]
+  cached: number
   identifiers: { [name: string]: number | undefined }
   scopes: {
     vFor: number
@@ -84,14 +92,15 @@ export interface TransformContext extends Required<TransformOptions> {
   parent: ParentNode | null
   childIndex: number
   currentNode: RootNode | TemplateChildNode | null
-  helper<T extends RuntimeHelper>(name: T): T
-  helperString(name: RuntimeHelper): string
+  helper<T extends symbol>(name: T): T
+  helperString(name: symbol): string
   replaceNode(node: TemplateChildNode): void
   removeNode(node?: TemplateChildNode): void
-  onNodeRemoved: () => void
+  onNodeRemoved(): void
   addIdentifiers(exp: ExpressionNode | string): void
   removeIdentifiers(exp: ExpressionNode | string): void
   hoist(exp: JSChildNode): SimpleExpressionNode
+  cache<T extends JSChildNode>(exp: T): CacheExpression | T
 }
 
 function createTransformContext(
@@ -99,6 +108,7 @@ function createTransformContext(
   {
     prefixIdentifiers = false,
     hoistStatic = false,
+    cacheHandlers = false,
     nodeTransforms = [],
     directiveTransforms = {},
     onError = defaultOnError
@@ -110,6 +120,7 @@ function createTransformContext(
     components: new Set(),
     directives: new Set(),
     hoists: [],
+    cached: 0,
     identifiers: {},
     scopes: {
       vFor: 0,
@@ -119,6 +130,7 @@ function createTransformContext(
     },
     prefixIdentifiers,
     hoistStatic,
+    cacheHandlers,
     nodeTransforms,
     directiveTransforms,
     onError,
@@ -205,6 +217,9 @@ function createTransformContext(
         false,
         exp.loc
       )
+    },
+    cache(exp) {
+      return cacheHandlers ? createCacheExpression(++context.cached, exp) : exp
     }
   }
 
@@ -244,7 +259,7 @@ function finalizeRoot(root: RootNode, context: TransformContext) {
       const codegenNode = child.codegenNode as
         | ElementCodegenNode
         | ComponentCodegenNode
-      if (codegenNode.callee === APPLY_DIRECTIVES) {
+      if (codegenNode.callee === WITH_DIRECTIVES) {
         codegenNode.arguments[0].callee = helper(CREATE_BLOCK)
       } else {
         codegenNode.callee = helper(CREATE_BLOCK)
@@ -274,6 +289,7 @@ function finalizeRoot(root: RootNode, context: TransformContext) {
   root.components = [...context.components]
   root.directives = [...context.directives]
   root.hoists = context.hoists
+  root.cached = context.cached
 }
 
 export function traverseChildren(

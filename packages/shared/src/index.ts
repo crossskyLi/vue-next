@@ -1,5 +1,7 @@
 export * from './patchFlags'
-export { globalsWhitelist } from './globalsWhitelist'
+export * from './element'
+export { isGloballyWhitelisted } from './globalsWhitelist'
+export { makeMap } from './makeMap'
 
 export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__
   ? Object.freeze({})
@@ -7,6 +9,11 @@ export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__
 export const EMPTY_ARR: [] = []
 
 export const NOOP = () => {}
+
+/**
+ * Always return false.
+ */
+export const NO = () => false
 
 export const isOn = (key: string) => key[0] === 'o' && key[1] === 'n'
 
@@ -34,6 +41,10 @@ export const isSymbol = (val: any): val is symbol => typeof val === 'symbol'
 export const isObject = (val: any): val is Record<any, any> =>
   val !== null && typeof val === 'object'
 
+export function isPromise<T = any>(val: any): val is Promise<T> {
+  return isObject(val) && isFunction(val.then) && isFunction(val.catch)
+}
+
 export const objectToString = Object.prototype.toString
 export const toTypeString = (value: unknown): string =>
   objectToString.call(value)
@@ -41,9 +52,8 @@ export const toTypeString = (value: unknown): string =>
 export const isPlainObject = (val: any): val is object =>
   toTypeString(val) === '[object Object]'
 
-const vnodeHooksRE = /^vnode/
 export const isReservedProp = (key: string): boolean =>
-  key === 'key' || key === 'ref' || vnodeHooksRE.test(key)
+  key === 'key' || key === 'ref' || key === '$once' || key.startsWith(`onVnode`)
 
 const camelizeRE = /-(\w)/g
 export const camelize = (str: string): string => {

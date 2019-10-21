@@ -117,6 +117,7 @@ describe('DOM parser', () => {
           type: NodeTypes.SIMPLE_EXPRESSION,
           content: `a < b`,
           isStatic: false,
+          isConstant: false,
           loc: {
             start: { offset: 8, line: 1, column: 9 },
             end: { offset: 16, line: 1, column: 17 },
@@ -151,6 +152,28 @@ describe('DOM parser', () => {
           source: '<img>'
         },
         codegenNode: undefined
+      })
+    })
+
+    test('native element', () => {
+      const ast = parse('<div></div><comp></comp><Comp></Comp>', parserOptions)
+
+      expect(ast.children[0]).toMatchObject({
+        type: NodeTypes.ELEMENT,
+        tag: 'div',
+        tagType: ElementTypes.ELEMENT
+      })
+
+      expect(ast.children[1]).toMatchObject({
+        type: NodeTypes.ELEMENT,
+        tag: 'comp',
+        tagType: ElementTypes.COMPONENT
+      })
+
+      expect(ast.children[2]).toMatchObject({
+        type: NodeTypes.ELEMENT,
+        tag: 'Comp',
+        tagType: ElementTypes.COMPONENT
       })
     })
 

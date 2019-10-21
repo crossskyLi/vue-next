@@ -1,8 +1,9 @@
+import { NO } from '@vue/shared'
 import {
   ErrorCodes,
-  CompilerError,
   createCompilerError,
-  defaultOnError
+  defaultOnError,
+  CompilerError
 } from './errors'
 import {
   assert,
@@ -26,9 +27,12 @@ import {
   TemplateChildNode,
   InterpolationNode
 } from './ast'
+import { extend } from '@vue/shared'
 
 export interface ParserOptions {
   isVoidTag?: (tag: string) => boolean // e.g. img, br, hr
+  isNativeTag?: (tag: string) => boolean // e.g. loading-indicator in weex
+  isCustomElement?: (tag: string) => boolean
   getNamespace?: (tag: string, parent: ElementNode | undefined) => Namespace
   getTextMode?: (tag: string, ns: Namespace) => TextModes
   delimiters?: [string, string] // ['{{', '}}']
@@ -41,12 +45,17 @@ export interface ParserOptions {
   onError?: (error: CompilerError) => void
 }
 
-export const defaultParserOptions: Required<ParserOptions> = {
+// `isNativeTag` is optional, others are required
+type MergedParserOptions = Omit<Required<ParserOptions>, 'isNativeTag'> &
+  Pick<ParserOptions, 'isNativeTag'>
+
+export const defaultParserOptions: MergedParserOptions = {
   delimiters: [`{{`, `}}`],
   ignoreSpaces: true,
   getNamespace: () => Namespaces.HTML,
   getTextMode: () => TextModes.DATA,
-  isVoidTag: () => false,
+  isVoidTag: NO,
+  isCustomElement: NO,
   namedCharacterReferences: {
     'gt;': '>',
     'lt;': '<',
@@ -67,13 +76,14 @@ export const enum TextModes {
 }
 
 interface ParserContext {
-  options: Required<ParserOptions>
+  options: MergedParserOptions
   readonly originalSource: string
   source: string
   offset: number
   line: number
   column: number
   maxCRNameLength: number
+  inPre: boolean
 }
 
 export function parse(content: string, options: ParserOptions = {}): RootNode {
@@ -88,7 +98,8 @@ export function parse(content: string, options: ParserOptions = {}): RootNode {
     directives: [],
     hoists: [],
     codegenNode: undefined,
-    loc: getSelection(context, start) // 疑惑
+    loc: getSelection(context, start), // 疑惑
+    cached: 0
   }
 }
 
@@ -109,7 +120,8 @@ function createParserContext(
     maxCRNameLength: Object.keys(
       options.namedCharacterReferences ||
         defaultParserOptions.namedCharacterReferences
-    ).reduce((max, name) => Math.max(max, name.length), 0) // 当前最大 字符长度。 用来干嘛，疑惑
+    ).reduce((max, name) => Math.max(max, name.length), 0),// 当前最大 字符长度。 用来干嘛，疑惑
+    inPre: false
   }
 }
 
@@ -128,7 +140,7 @@ function parseChildren(
     const s = context.source
     let node: TemplateChildNode | TemplateChildNode[] | undefined = undefined
 
-    if (startsWith(s, context.options.delimiters[0])) {
+    if (!context.inPre && startsWith(s, context.options.delimiters[0])) {
       // '{{'
       node = parseInterpolation(context, mode) // 双向绑定插入解析
     } else if (mode === TextModes.DATA && s[0] === '<') {
@@ -335,8 +347,10 @@ function parseElement(
   __DEV__ && assert(/^<[a-z]/i.test(context.source))
 
   // Start tag.
+  const wasInPre = context.inPre
   const parent = last(ancestors)
   const element = parseTag(context, TagType.Start, parent)
+  const isPreBoundary = context.inPre && !wasInPre
 
   if (element.isSelfClosing || context.options.isVoidTag(element.tag)) {
     return element
@@ -364,6 +378,10 @@ function parseElement(
   }
 
   element.loc = getSelection(context, element.loc.start)
+
+  if (isPreBoundary) {
+    context.inPre = false
+  }
   return element
 }
 
@@ -390,20 +408,78 @@ function parseTag(
   const start = getCursor(context)
   const match = /^<\/?([a-z][^\t\r\n\f />]*)/i.exec(context.source)!
   const tag = match[1]
-  const props = []
   const ns = context.options.getNamespace(tag, parent)
 
-  let tagType = ElementTypes.ELEMENT // 普通标签
-  if (tag === 'slot') tagType = ElementTypes.SLOT
-  // <slot>
-  else if (tag === 'template') tagType = ElementTypes.TEMPLATE
-  // <template></template>
-  else if (/[A-Z-]/.test(tag)) tagType = ElementTypes.COMPONENT // 组件类型 连接符和大小写
-
-  advanceBy(context, match[0].length) // 删掉已经解析的source
+  advanceBy(context, match[0].length)
   advanceSpaces(context)
 
+  // save current state in case we need to re-parse attributes with v-pre
+  const cursor = getCursor(context)
+  const currentSource = context.source
+
   // Attributes.
+  let props = parseAttributes(context, type)
+
+  // check v-pre
+  if (
+    !context.inPre &&
+    props.some(p => p.type === NodeTypes.DIRECTIVE && p.name === 'pre')
+  ) {
+    context.inPre = true
+    // reset context
+    extend(context, cursor)
+    context.source = currentSource
+    // re-parse attrs and filter out v-pre itself
+    props = parseAttributes(context, type).filter(p => p.name !== 'v-pre')
+  }
+
+  // Tag close.
+  let isSelfClosing = false
+  if (context.source.length === 0) {
+    emitError(context, ErrorCodes.EOF_IN_TAG)
+  } else {
+    isSelfClosing = startsWith(context.source, '/>')
+    if (type === TagType.End && isSelfClosing) {
+      emitError(context, ErrorCodes.END_TAG_WITH_TRAILING_SOLIDUS)
+    }
+    advanceBy(context, isSelfClosing ? 2 : 1)
+  }
+  // 普通标签
+  let tagType = ElementTypes.ELEMENT 
+  if (!context.inPre && !context.options.isCustomElement(tag)) {
+    if (context.options.isNativeTag) {
+      if (!context.options.isNativeTag(tag)) tagType = ElementTypes.COMPONENT // 组件类型 连接符和大小写
+    } else {
+      if (/^[A-Z]/.test(tag)) tagType = ElementTypes.COMPONENT
+    }
+    // <slot>
+    if (tag === 'slot') tagType = ElementTypes.SLOT 
+    // <template></template>
+    else if (tag === 'template') tagType = ElementTypes.TEMPLATE 
+     
+    else if (tag === 'portal' || tag === 'Portal') tagType = ElementTypes.PORTAL
+    else if (tag === 'suspense' || tag === 'Suspense')
+      tagType = ElementTypes.SUSPENSE
+  }
+
+  return {
+    type: NodeTypes.ELEMENT,
+    ns,
+    tag,
+    tagType,
+    props,
+    isSelfClosing,
+    children: [],
+    loc: getSelection(context, start),
+    codegenNode: undefined // to be created during transform phase
+  }
+}
+
+function parseAttributes(
+  context: ParserContext,
+  type: TagType
+): (AttributeNode | DirectiveNode)[] {
+  const props = []
   const attributeNames = new Set<string>()
   while (
     context.source.length > 0 &&
@@ -430,30 +506,7 @@ function parseTag(
     }
     advanceSpaces(context)
   }
-
-  // Tag close.
-  let isSelfClosing = false
-  if (context.source.length === 0) {
-    emitError(context, ErrorCodes.EOF_IN_TAG)
-  } else {
-    isSelfClosing = startsWith(context.source, '/>')
-    if (type === TagType.End && isSelfClosing) {
-      emitError(context, ErrorCodes.END_TAG_WITH_TRAILING_SOLIDUS)
-    }
-    advanceBy(context, isSelfClosing ? 2 : 1)
-  }
-
-  return {
-    type: NodeTypes.ELEMENT,
-    ns,
-    tag,
-    tagType,
-    props,
-    isSelfClosing,
-    children: [],
-    loc: getSelection(context, start),
-    codegenNode: undefined // to be created during transform phase
-  }
+  return props
 }
 
 function parseAttribute(
@@ -512,7 +565,7 @@ function parseAttribute(
   const loc = getSelection(context, start)
 
   // v- 指令解析, : 解析, # @ 事件解析
-  if (/^(v-|:|@|#)/.test(name)) {
+  if (!context.inPre && /^(v-|:|@|#)/.test(name)) { 
     const match = /(?:^v-([a-z0-9-]+))?(?:(?::|^@|^#)([^\.]+))?(.+)?$/i.exec(
       name
     )!
@@ -546,6 +599,7 @@ function parseAttribute(
         type: NodeTypes.SIMPLE_EXPRESSION,
         content,
         isStatic,
+        isConstant: isStatic,
         loc
       }
     }
@@ -571,6 +625,9 @@ function parseAttribute(
         type: NodeTypes.SIMPLE_EXPRESSION,
         content: value.content,
         isStatic: false,
+        // Treat as non-constant by default. This can be potentially set to
+        // true by `transformExpression` to make it eligible for hoisting.
+        isConstant: false,
         loc: value.loc
       },
       arg,
@@ -680,6 +737,8 @@ function parseInterpolation(
     content: {
       type: NodeTypes.SIMPLE_EXPRESSION,
       isStatic: false,
+      // Set `isConstant` to false by default and will decide in transformExpression
+      isConstant: false,
       content,
       loc: getSelection(context, innerStart, innerEnd)
     },
