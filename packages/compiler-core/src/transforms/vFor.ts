@@ -15,7 +15,9 @@ import {
   createObjectExpression,
   createObjectProperty,
   ForCodegenNode,
-  ElementCodegenNode
+  ElementCodegenNode,
+  SlotOutletCodegenNode,
+  SlotOutletNode
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
 import {
@@ -71,7 +73,8 @@ export const transformFor = createStructuralDirectiveTransform(
       ? PatchFlags.KEYED_FRAGMENT
       : PatchFlags.UNKEYED_FRAGMENT
     const codegenNode = createSequenceExpression([
-      createCallExpression(helper(OPEN_BLOCK)),
+      // fragment blocks disable tracking since they always diff their children
+      createCallExpression(helper(OPEN_BLOCK), [`false`]),
       createCallExpression(helper(CREATE_BLOCK), [
         helper(FRAGMENT),
         `null`,
@@ -117,7 +120,7 @@ export const transformFor = createStructuralDirectiveTransform(
         : isTemplate &&
           node.children.length === 1 &&
           isSlotOutlet(node.children[0])
-          ? node.children[0]
+          ? (node.children[0] as SlotOutletNode) // api-extractor somehow fails to infer this
           : null
       const keyProperty = keyProp
         ? createObjectProperty(
@@ -129,7 +132,7 @@ export const transformFor = createStructuralDirectiveTransform(
         : null
       if (slotOutlet) {
         // <slot v-for="..."> or <template v-for="..."><slot/></template>
-        childBlock = slotOutlet.codegenNode!
+        childBlock = slotOutlet.codegenNode as SlotOutletCodegenNode
         if (isTemplate && keyProperty) {
           // <template v-for="..." :key="..."><slot/></template>
           // we need to inject the key to the renderSlot() call.

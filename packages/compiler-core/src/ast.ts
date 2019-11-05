@@ -35,6 +35,7 @@ export const enum NodeTypes {
   IF,
   IF_BRANCH,
   FOR,
+  TEXT_CALL,
   // codegen
   JS_CALL_EXPRESSION,
   JS_OBJECT_EXPRESSION,
@@ -86,6 +87,7 @@ export type TemplateChildNode =
   | CommentNode
   | IfNode
   | ForNode
+  | TextCallNode
 
 export interface RootNode extends Node {
   type: NodeTypes.ROOT
@@ -114,46 +116,50 @@ export interface BaseElementNode extends Node {
   isSelfClosing: boolean
   props: Array<AttributeNode | DirectiveNode>
   children: TemplateChildNode[]
-  codegenNode: CallExpression | SimpleExpressionNode | undefined
+  codegenNode:
+    | CallExpression
+    | SimpleExpressionNode
+    | CacheExpression
+    | undefined
 }
 
 export interface PlainElementNode extends BaseElementNode {
   tagType: ElementTypes.ELEMENT
-  codegenNode: ElementCodegenNode | undefined | SimpleExpressionNode // only when hoisted
+  codegenNode:
+    | ElementCodegenNode
+    | undefined
+    | SimpleExpressionNode // when hoisted
+    | CacheExpression // when cached by v-once
 }
 
 export interface ComponentNode extends BaseElementNode {
   tagType: ElementTypes.COMPONENT
-  codegenNode: ComponentCodegenNode | undefined
+  codegenNode: ComponentCodegenNode | undefined | CacheExpression // when cached by v-once
 }
 
 export interface SlotOutletNode extends BaseElementNode {
   tagType: ElementTypes.SLOT
-  codegenNode: SlotOutletCodegenNode | undefined
+  codegenNode: SlotOutletCodegenNode | undefined | CacheExpression // when cached by v-once
 }
 
 export interface TemplateNode extends BaseElementNode {
   tagType: ElementTypes.TEMPLATE
-  codegenNode:
-    | ElementCodegenNode
-    | CodegenNodeWithDirective<ElementCodegenNode>
-    | undefined
+  codegenNode: ElementCodegenNode | undefined | CacheExpression
 }
 
 export interface PortalNode extends BaseElementNode {
   tagType: ElementTypes.PORTAL
-  codegenNode: ElementCodegenNode | undefined
+  codegenNode: ElementCodegenNode | undefined | CacheExpression
 }
 
 export interface SuspenseNode extends BaseElementNode {
   tagType: ElementTypes.SUSPENSE
-  codegenNode: ElementCodegenNode | undefined
+  codegenNode: ElementCodegenNode | undefined | CacheExpression
 }
 
 export interface TextNode extends Node {
   type: NodeTypes.TEXT
   content: string
-  isEmpty: boolean
 }
 
 export interface CommentNode extends Node {
@@ -227,6 +233,12 @@ export interface ForNode extends Node {
   codegenNode: ForCodegenNode
 }
 
+export interface TextCallNode extends Node {
+  type: NodeTypes.TEXT_CALL
+  content: TextNode | InterpolationNode | CompoundExpressionNode
+  codegenNode: CallExpression
+}
+
 // We also include a number of JavaScript AST nodes for code generation.
 // The AST is an intentionally minimal subset just to meet the exact needs of
 // Vue render function generation.
@@ -290,6 +302,7 @@ export interface CacheExpression extends Node {
   type: NodeTypes.JS_CACHE_EXPRESSION
   index: number
   value: JSChildNode
+  isVNode: boolean
 }
 
 // Codegen Node Types ----------------------------------------------------------
@@ -396,7 +409,7 @@ export interface DynamicSlotFnProperty extends Property {
   value: SlotFunctionExpression
 }
 
-// applyDirectives(createVNode(...), [
+// withDirectives(createVNode(...), [
 //    [_directive_foo, someValue],
 //    [_directive_bar, someValue, "arg", { mod: true }]
 // ])
@@ -617,12 +630,14 @@ export function createConditionalExpression(
 
 export function createCacheExpression(
   index: number,
-  value: JSChildNode
+  value: JSChildNode,
+  isVNode: boolean = false
 ): CacheExpression {
   return {
     type: NodeTypes.JS_CACHE_EXPRESSION,
     index,
     value,
+    isVNode,
     loc: locStub
   }
 }

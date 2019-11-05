@@ -1,10 +1,20 @@
-import { ComponentInternalInstance, Data } from './component'
+import { ComponentInternalInstance, Data, Emit } from './component'
 import { nextTick } from './scheduler'
 import { instanceWatch } from './apiWatch'
 import { EMPTY_OBJ, hasOwn, isGloballyWhitelisted } from '@vue/shared'
-import { ExtractComputedReturns } from './apiOptions'
+import {
+  ExtractComputedReturns,
+  ComponentOptionsBase,
+  ComputedOptions,
+  MethodOptions
+} from './apiOptions'
 import { UnwrapRef, ReactiveEffect } from '@vue/reactivity'
 import { warn } from './warning'
+import { Slots } from './componentSlots'
+import {
+  currentRenderingInstance,
+  markAttrsAccessed
+} from './componentRenderUtils'
 
 // public properties exposed on the proxy, which is used as the render context
 // in templates (as `this` in the render option)
@@ -12,21 +22,20 @@ export type ComponentPublicInstance<
   P = {},
   B = {},
   D = {},
-  C = {},
-  M = {},
+  C extends ComputedOptions = {},
+  M extends MethodOptions = {},
   PublicProps = P
 > = {
-  [key: string]: any
   $data: D
   $props: PublicProps
   $attrs: Data
   $refs: Data
-  $slots: Data
+  $slots: Slots
   $root: ComponentInternalInstance | null
   $parent: ComponentInternalInstance | null
-  $emit: (event: string, ...args: unknown[]) => void
+  $emit: Emit
   $el: any
-  $options: any
+  $options: ComponentOptionsBase<P, B, D, C, M>
   $forceUpdate: ReactiveEffect
   $nextTick: typeof nextTick
   $watch: typeof instanceWatch
@@ -56,7 +65,19 @@ const enum AccessTypes {
 
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get(target: ComponentInternalInstance, key: string) {
-    const { renderContext, data, props, propsProxy, accessCache, type } = target
+    const {
+      renderContext,
+      data,
+      props,
+      propsProxy,
+      accessCache,
+      type,
+      sink
+    } = target
+    // fast path for unscopables when using `with` block
+    if (__RUNTIME_COMPILE__ && (key as any) === Symbol.unscopables) {
+      return
+    }
     // This getter gets called for every property access on the render context
     // during render and is a major hotspot. The most expensive part of this
     // is the multiple hasOwn() calls. It's much faster to do a simple property
@@ -90,6 +111,9 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     } else if (key === '$el') {
       return target.vnode.el
     } else if (hasOwn(publicPropertiesMap, key)) {
+      if (__DEV__ && key === '$attrs') {
+        markAttrsAccessed()
+      }
       return target[publicPropertiesMap[key]]
     }
     // methods are only exposed when options are supported
@@ -103,7 +127,14 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
           return instanceWatch.bind(target)
       }
     }
-    return target.user[key]
+    if (hasOwn(sink, key)) {
+      return sink[key]
+    } else if (__DEV__ && currentRenderingInstance != null) {
+      warn(
+        `Property ${JSON.stringify(key)} was accessed during render ` +
+          `but is not defined on instance.`
+      )
+    }
   },
 
   set(target: ComponentInternalInstance, key: string, value: any): boolean {
@@ -125,7 +156,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         warn(`Attempting to mutate prop "${key}". Props are readonly.`, target)
       return false
     } else {
-      target.user[key] = value
+      target.sink[key] = value
     }
     return true
   }
@@ -134,7 +165,10 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
 if (__RUNTIME_COMPILE__) {
   // this trap is only called in browser-compiled render functions that use
   // `with (this) {}`
-  PublicInstanceProxyHandlers.has = (_: any, key: string): boolean => {
+  PublicInstanceProxyHandlers.has = (
+    _: ComponentInternalInstance,
+    key: string
+  ): boolean => {
     return key[0] !== '_' && !isGloballyWhitelisted(key)
   }
 }

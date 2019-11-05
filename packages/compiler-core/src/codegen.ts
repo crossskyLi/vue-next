@@ -29,12 +29,13 @@ import {
 } from './utils'
 import { isString, isArray, isSymbol } from '@vue/shared'
 import {
+  helperNameMap,
   TO_STRING,
   CREATE_VNODE,
-  COMMENT,
-  helperNameMap,
   RESOLVE_COMPONENT,
-  RESOLVE_DIRECTIVE
+  RESOLVE_DIRECTIVE,
+  SET_BLOCK_TRACKING,
+  CREATE_COMMENT
 } from './runtimeHelpers'
 
 type CodegenNode = TemplateChildNode | JSChildNode
@@ -211,9 +212,17 @@ export function generate(
         // has check cost, but hoists are lifted out of the function - we need
         // to provide the helper here.
         if (ast.hoists.length) {
-          push(`const _${helperNameMap[CREATE_VNODE]} = Vue.createVNode\n`)
-          if (ast.helpers.includes(COMMENT)) {
-            push(`const _${helperNameMap[COMMENT]} = Vue.Comment\n`)
+          push(
+            `const _${helperNameMap[CREATE_VNODE]} = Vue.${
+              helperNameMap[CREATE_VNODE]
+            }\n`
+          )
+          if (ast.helpers.includes(CREATE_COMMENT)) {
+            push(
+              `const _${helperNameMap[CREATE_COMMENT]} = Vue.${
+                helperNameMap[CREATE_COMMENT]
+              }\n`
+            )
           }
         }
       }
@@ -247,6 +256,10 @@ export function generate(
           .join(', ')} } = _Vue`
       )
       newline()
+      if (ast.cached > 0) {
+        push(`const _cache = $cache`)
+        newline()
+      }
       newline()
     }
   } else {
@@ -400,6 +413,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.INTERPOLATION:
       genInterpolation(node, context)
       break
+    case NodeTypes.TEXT_CALL:
+      genNode(node.codegenNode, context)
+      break
     case NodeTypes.COMPOUND_EXPRESSION:
       genCompoundExpression(node, context)
       break
@@ -494,12 +510,7 @@ function genExpressionAsPropertyKey(
 function genComment(node: CommentNode, context: CodegenContext) {
   if (__DEV__) {
     const { push, helper } = context
-    push(
-      `${helper(CREATE_VNODE)}(${helper(COMMENT)}, null, ${JSON.stringify(
-        node.content
-      )})`,
-      node
-    )
+    push(`${helper(CREATE_COMMENT)}(${JSON.stringify(node.content)})`, node)
   }
 }
 
@@ -622,7 +633,22 @@ function genSequenceExpression(
 }
 
 function genCacheExpression(node: CacheExpression, context: CodegenContext) {
-  context.push(`_cache[${node.index}] || (_cache[${node.index}] = `)
+  const { push, helper, indent, deindent, newline } = context
+  push(`_cache[${node.index}] || (`)
+  if (node.isVNode) {
+    indent()
+    push(`${helper(SET_BLOCK_TRACKING)}(-1),`)
+    newline()
+  }
+  push(`_cache[${node.index}] = `)
   genNode(node.value, context)
-  context.push(`)`)
+  if (node.isVNode) {
+    push(`,`)
+    newline()
+    push(`${helper(SET_BLOCK_TRACKING)}(1),`)
+    newline()
+    push(`_cache[${node.index}]`)
+    deindent()
+  }
+  push(`)`)
 }

@@ -1,4 +1,4 @@
-import { isObject, toTypeString } from '@vue/shared'
+import { isObject, toRawType } from '@vue/shared'
 import { mutableHandlers, readonlyHandlers } from './baseHandlers'
 import {
   mutableCollectionHandlers,
@@ -13,7 +13,7 @@ import { makeMap } from '@vue/shared'
 // which maintains a Set of subscribers, but we simply store them as
 // raw Sets to reduce memory overhead.
 export type Dep = Set<ReactiveEffect>
-export type KeyToDepMap = Map<string | symbol, Dep>
+export type KeyToDepMap = Map<any, Dep>
 export const targetMap = new WeakMap<any, KeyToDepMap>()
 
 // WeakMaps that store {raw <-> observed} pairs.
@@ -29,16 +29,14 @@ const nonReactiveValues = new WeakSet<any>()
 
 const collectionTypes = new Set<Function>([Set, Map, WeakMap, WeakSet])
 const isObservableType = /*#__PURE__*/ makeMap(
-  ['Object', 'Array', 'Map', 'Set', 'WeakMap', 'WeakSet']
-    .map(t => `[object ${t}]`)
-    .join(',')
+  'Object,Array,Map,Set,WeakMap,WeakSet'
 )
 
 const canObserve = (value: any): boolean => {
   return (
     !value._isVue &&
     !value._isVNode &&
-    isObservableType(toTypeString(value)) &&
+    isObservableType(toRawType(value)) &&
     !nonReactiveValues.has(value)
   )
 }
@@ -83,7 +81,7 @@ export function readonly<T extends object>(
 }
 
 function createReactiveObject(
-  target: any,
+  target: unknown,
   toProxy: WeakMap<any, any>,
   toRaw: WeakMap<any, any>,
   baseHandlers: ProxyHandler<any>,
@@ -120,11 +118,11 @@ function createReactiveObject(
   return observed
 }
 
-export function isReactive(value: any): boolean {
+export function isReactive(value: unknown): boolean {
   return reactiveToRaw.has(value) || readonlyToRaw.has(value)
 }
 
-export function isReadonly(value: any): boolean {
+export function isReadonly(value: unknown): boolean {
   return readonlyToRaw.has(value)
 }
 

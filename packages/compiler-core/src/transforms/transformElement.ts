@@ -120,7 +120,7 @@ export const transformElement: NodeTransform = (node, context) => {
       if (!hasProps) {
         args.push(`null`)
       }
-      if (isComponent) {
+      if (isComponent || node.tagType === ElementTypes.SUSPENSE) {
         const { slots, hasDynamicSlots } = buildSlots(node, context)
         args.push(slots)
         if (hasDynamicSlots) {
@@ -277,6 +277,11 @@ export function buildProps(
             createCompilerError(ErrorCodes.X_V_SLOT_MISPLACED, loc)
           )
         }
+        continue
+      }
+
+      // skip v-once - it is handled by its dedicated transform.
+      if (name === 'once') {
         continue
       }
 

@@ -18,11 +18,11 @@ import {
 } from '../src'
 import {
   CREATE_VNODE,
-  COMMENT,
   TO_STRING,
   RESOLVE_DIRECTIVE,
   helperNameMap,
-  RESOLVE_COMPONENT
+  RESOLVE_COMPONENT,
+  CREATE_COMMENT
 } from '../src/runtimeHelpers'
 import { createElementWithCodegen } from './testUtils'
 import { PatchFlags } from '@vue/shared'
@@ -149,7 +149,6 @@ describe('compiler: codegen', () => {
         codegenNode: {
           type: NodeTypes.TEXT,
           content: 'hello',
-          isEmpty: false,
           loc: locStub
         }
       })
@@ -178,11 +177,7 @@ describe('compiler: codegen', () => {
         }
       })
     )
-    expect(code).toMatch(
-      `return _${helperNameMap[CREATE_VNODE]}(_${
-        helperNameMap[COMMENT]
-      }, null, "foo")`
-    )
+    expect(code).toMatch(`return _${helperNameMap[CREATE_COMMENT]}("foo")`)
     expect(code).toMatchSnapshot()
   })
 
@@ -378,6 +373,35 @@ describe('compiler: codegen', () => {
     )
     expect(code).toMatch(`const _cache = _ctx.$cache`)
     expect(code).toMatch(`_cache[1] || (_cache[1] = foo)`)
+    expect(code).toMatchSnapshot()
+  })
+
+  test('CacheExpression w/ isVNode: true', () => {
+    const { code } = generate(
+      createRoot({
+        cached: 1,
+        codegenNode: createCacheExpression(
+          1,
+          createSimpleExpression(`foo`, false),
+          true
+        )
+      }),
+      {
+        mode: 'module',
+        prefixIdentifiers: true
+      }
+    )
+    expect(code).toMatch(`const _cache = _ctx.$cache`)
+    expect(code).toMatch(
+      `
+  _cache[1] || (
+    setBlockTracking(-1),
+    _cache[1] = foo,
+    setBlockTracking(1),
+    _cache[1]
+  )
+    `.trim()
+    )
     expect(code).toMatchSnapshot()
   })
 })

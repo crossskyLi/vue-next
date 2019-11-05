@@ -22,9 +22,10 @@ export function compile(
       text: transformVText,
       model: transformModel, // override compiler-core
       on: transformOn,
-      ...(options.directiveTransforms || {})// 允许用户添加自己的 directiveTransforms 指令编译
+      ...(options.directiveTransforms || {}) // 允许用户添加自己的 directiveTransforms 指令编译
     }
   })
 }
 
 export * from '@vue/compiler-core'
+export * from './tagConfig'
