@@ -1035,6 +1035,7 @@ export function createRenderer<
     parentSuspense: HostSuspenseBoundary | null,
     isSVG: boolean
   ) {
+    debugger
     const instance: ComponentInternalInstance = (initialVNode.component = createComponentInstance(
       initialVNode,
       parentComponent

@@ -239,7 +239,11 @@ function createTransformContext(
 }
 
 export function transform(root: RootNode, options: TransformOptions) {
+  debugger
+  // 创建即将转换的上下文
+  // 这里会注入很多解析不同语法的节点解析函数和指令解析函数
   const context = createTransformContext(root, options)
+  // 递归节点
   traverseNode(root, context)
   if (options.hoistStatic) {
     hoistStatic(root, context)

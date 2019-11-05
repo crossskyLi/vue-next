@@ -120,7 +120,7 @@ function createParserContext(
     maxCRNameLength: Object.keys(
       options.namedCharacterReferences ||
         defaultParserOptions.namedCharacterReferences
-    ).reduce((max, name) => Math.max(max, name.length), 0),// 当前最大 字符长度。 用来干嘛，疑惑
+    ).reduce((max, name) => Math.max(max, name.length), 0), // 当前最大 字符长度。 用来干嘛，疑惑
     inPre: false
   }
 }
@@ -445,7 +445,7 @@ function parseTag(
     advanceBy(context, isSelfClosing ? 2 : 1)
   }
   // 普通标签
-  let tagType = ElementTypes.ELEMENT 
+  let tagType = ElementTypes.ELEMENT
   if (!context.inPre && !context.options.isCustomElement(tag)) {
     if (context.options.isNativeTag) {
       if (!context.options.isNativeTag(tag)) tagType = ElementTypes.COMPONENT // 组件类型 连接符和大小写
@@ -453,10 +453,9 @@ function parseTag(
       if (/^[A-Z]/.test(tag)) tagType = ElementTypes.COMPONENT
     }
     // <slot>
-    if (tag === 'slot') tagType = ElementTypes.SLOT 
+    if (tag === 'slot') tagType = ElementTypes.SLOT
     // <template></template>
-    else if (tag === 'template') tagType = ElementTypes.TEMPLATE 
-     
+    else if (tag === 'template') tagType = ElementTypes.TEMPLATE
     else if (tag === 'portal' || tag === 'Portal') tagType = ElementTypes.PORTAL
     else if (tag === 'suspense' || tag === 'Suspense')
       tagType = ElementTypes.SUSPENSE
@@ -565,7 +564,7 @@ function parseAttribute(
   const loc = getSelection(context, start)
 
   // v- 指令解析, : 解析, # @ 事件解析
-  if (!context.inPre && /^(v-|:|@|#)/.test(name)) { 
+  if (!context.inPre && /^(v-|:|@|#)/.test(name)) {
     const match = /(?:^v-([a-z0-9-]+))?(?:(?::|^@|^#)([^\.]+))?(.+)?$/i.exec(
       name
     )!
@@ -1009,9 +1008,9 @@ function isEnd(
 
 function startsWithEndTagOpen(source: string, tag: string): boolean {
   return (
-    startsWith(source, '</') &&
-    source.substr(2, tag.length).toLowerCase() === tag.toLowerCase() &&
-    /[\t\n\f />]/.test(source[2 + tag.length] || '>')
+    startsWith(source, '</') && // 以</ 开头
+    source.substr(2, tag.length).toLowerCase() === tag.toLowerCase() && // 标签名一样
+    /[\t\n\f />]/.test(source[2 + tag.length] || '>') // 后面没有在有新的标签
   )
 }
 

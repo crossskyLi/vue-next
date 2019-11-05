@@ -248,6 +248,7 @@ export function setupStatefulComponent(
   instance: ComponentInternalInstance,
   parentSuspense: SuspenseBoundary | null
 ) {
+  debugger
   const Component = instance.type as ComponentOptions
 
   if (__DEV__) {
