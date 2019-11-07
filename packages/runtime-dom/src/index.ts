@@ -7,9 +7,8 @@ import {
 import { nodeOps } from './nodeOps'
 import { patchProp } from './patchProp'
 // Importing from the compiler, will be tree-shaken in prod
-import { isHTMLTag, isSVGTag } from '@vue/compiler-dom'
-import { isFunction, isString } from '@vue/shared'
-/* 调用 runtime core 生成一个render */
+import { isFunction, isString, isHTMLTag, isSVGTag } from '@vue/shared'
+
 const { render: baseRender, createApp: baseCreateApp } = createRenderer({
   patchProp,
   ...nodeOps
