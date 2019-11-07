@@ -97,11 +97,19 @@ type NormalizedPropsOptions = Record<string, NormalizedProp>
 //   - if has declared props: put declared ones in `props`, the rest in `attrs`
 //   - else: everything goes in `props`.
 
+// 解析原始VNode数据。
+// -过滤掉保留的关键字(key, ref, slots)
+// -将 class name 和 style 提取到$attrs中(合并到child 组件根中去)
+// -其余:
+// -如果已经声明的 `props` : 声明 的放在‘props’里，其余放在‘attrs’里
+// -否则: 一切都变成 “props”
+
 export function resolveProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
   _options: ComponentPropsOptions | void
 ) {
+  debugger
   const hasDeclaredProps = _options != null
   const options = normalizePropsOptions(_options)!
   if (!rawProps && !hasDeclaredProps) {

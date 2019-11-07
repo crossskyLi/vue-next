@@ -138,6 +138,7 @@ export function createComponentInstance(
   vnode: VNode,
   parent: ComponentInternalInstance | null
 ) {
+  debugger
   // inherit parent app context - or - if root, adopt from root vnode
   const appContext =
     (parent ? parent.appContext : vnode.appContext) || emptyAppContext
@@ -200,7 +201,7 @@ export function createComponentInstance(
 
     emit: (event, ...args) => {
       const props = instance.vnode.props || EMPTY_OBJ
-      const handler = props[`on${event}`] || props[`on${capitalize(event)}`]
+      const handler = props[`on${event}`] || props[`on${capitalize(event)}`] // 这里应该是onclick 这些的一个报错??
       if (handler) {
         callWithAsyncErrorHandling(
           handler,
@@ -212,6 +213,7 @@ export function createComponentInstance(
     }
   }
 
+  /* 生成instance */
   instance.root = parent ? parent.root : instance
   return instance
 }
@@ -352,6 +354,7 @@ function finishComponentSetup(
   instance: ComponentInternalInstance,
   parentSuspense: SuspenseBoundary | null
 ) {
+  debugger
   const Component = instance.type as ComponentOptions
   if (!instance.render) {
     if (__RUNTIME_COMPILE__ && Component.template && !Component.render) {

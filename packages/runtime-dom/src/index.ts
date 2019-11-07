@@ -9,7 +9,7 @@ import { patchProp } from './patchProp'
 // Importing from the compiler, will be tree-shaken in prod
 import { isHTMLTag, isSVGTag } from '@vue/compiler-dom'
 import { isFunction, isString } from '@vue/shared'
-
+/* 调用 runtime core 生成一个render */
 const { render: baseRender, createApp: baseCreateApp } = createRenderer({
   patchProp,
   ...nodeOps
@@ -19,7 +19,9 @@ const { render: baseRender, createApp: baseCreateApp } = createRenderer({
 export const render = baseRender as RootRenderFunction<Node, Element>
 
 export const createApp = (): App<Element> => {
+  /* 创建一个vue 的app */
   const app = baseCreateApp()
+  debugger
 
   if (__DEV__) {
     // Inject `isNativeTag`
@@ -29,9 +31,11 @@ export const createApp = (): App<Element> => {
       writable: false
     })
   }
-
+  /* 缓存 app 的mount 方法 , 后面执行 */
+  /* runtime-core /src /apiApp */
   const mount = app.mount
   app.mount = (component, container, props): any => {
+    debugger
     if (isString(container)) {
       container = document.querySelector(container)!
       if (!container) {
@@ -44,11 +48,12 @@ export const createApp = (): App<Element> => {
       __RUNTIME_COMPILE__ &&
       !isFunction(component) &&
       !component.render &&
-      !component.template
+      !component.template // 选项没有带template 的兼容
     ) {
       component.template = container.innerHTML
     }
     // clear content before mounting
+    /* 这里跟 2.0 是一个套路 ,缓存  mount  再执行mount */
     container.innerHTML = ''
     return mount(component, container, props)
   }

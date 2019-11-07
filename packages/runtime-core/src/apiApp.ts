@@ -78,6 +78,8 @@ export function createAppAPI<HostNode, HostElement>(
   render: RootRenderFunction<HostNode, HostElement>
 ): () => App<HostElement> {
   return function createApp(): App {
+    /* 先执行这里, 开始组装 Vue */
+    // 真正生成Vue 实例的地方
     const context = createAppContext()
     const installedPlugins = new Set()
 
@@ -95,7 +97,7 @@ export function createAppAPI<HostNode, HostElement>(
           )
         }
       },
-
+      /* plugin 注册的地方  */
       use(plugin: Plugin) {
         if (installedPlugins.has(plugin)) {
           __DEV__ && warn(`Plugin has already been applied to target app.`)
@@ -113,7 +115,7 @@ export function createAppAPI<HostNode, HostElement>(
         }
         return app
       },
-
+      /* mixin */
       mixin(mixin: ComponentOptions) {
         if (__DEV__ && !__FEATURE_OPTIONS__) {
           warn('Mixins are only available in builds supporting Options API')
@@ -130,7 +132,7 @@ export function createAppAPI<HostNode, HostElement>(
 
         return app
       },
-
+      /* 注册组件 */
       component(name: string, component?: Component): any {
         if (__DEV__) {
           validateComponentName(name, context.config)
@@ -147,7 +149,7 @@ export function createAppAPI<HostNode, HostElement>(
           return app
         }
       },
-
+      /* 注册组件 */
       directive(name: string, directive?: Directive) {
         if (__DEV__) {
           validateDirectiveName(name)
@@ -165,17 +167,20 @@ export function createAppAPI<HostNode, HostElement>(
           return app
         }
       },
-
+      /* 组件安装 */
       mount(
         rootComponent: Component,
         rootContainer: HostElement,
         rootProps?: Data
       ): any {
         if (!isMounted) {
+          /* rootComponent 就是 CreatApp ().mount(app, container) 中的app */
           const vnode = createVNode(rootComponent, rootProps)
           // store app context on the root VNode.
           // this will be set on the root instance on initial mount.
-          vnode.appContext = context
+          vnode.appContext = context // vnode 的 上下文
+          debugger
+
           render(vnode, rootContainer)
           isMounted = true
           return vnode.component!.renderProxy

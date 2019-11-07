@@ -180,6 +180,7 @@ export function createVNode(
   patchFlag: number = 0,
   dynamicProps: string[] | null = null
 ): VNode {
+  debugger
   // class & style normalization.
   if (props !== null) {
     // for reactive or proxy objects, we need to clone it to enable mutation.
@@ -210,7 +211,7 @@ export function createVNode(
         : isFunction(type)
           ? ShapeFlags.FUNCTIONAL_COMPONENT
           : 0
-
+  /* Vnode 根节点 */
   const vnode: VNode = {
     _isVNode: true,
     type,
@@ -237,6 +238,10 @@ export function createVNode(
   // component nodes also should always be patched, because even if the
   // component doesn't need to update, it needs to persist the instance on to
   // the next vnode so that it can be properly unmounted later.
+
+  // 出现补丁标志表明该节点需要更新补丁。
+  // 组件节点也应该总是被打补丁，因为即使组件不需要更新，
+  // 它也需要将实例保存到下一个vnode，以便以后可以正确地卸载它。
   if (
     shouldTrack > 0 &&
     currentBlock !== null &&

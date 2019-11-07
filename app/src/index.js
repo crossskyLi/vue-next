@@ -8,6 +8,8 @@ import {
   createComponent
 } from '../../packages/vue/dist/vue.esm-browser'
 
+// yarn dev --formats browser
+
 const template = `<div>
   <div>
     {{ count }}
@@ -18,7 +20,18 @@ const template = `<div>
   <button @click="increment">count++</button>
 </div>`
 
-const myComponent = {
+const templateComp = `<span>{{count}}</span>`
+const component = {
+  name: 'a-comp',
+  template,
+  setup() {
+    return {
+      count: 8888
+    }
+  }
+}
+
+const App = {
   template,
   setup() {
     // reactive state
@@ -34,13 +47,11 @@ const myComponent = {
     watch(
       () => count.value * 2,
       val => {
-        debugger
         console.log(`count * 2 is ${val}`)
       }
     )
     // lifecycle
     onMounted(() => {
-      debugger
       console.log(`mounted`)
     })
     // expose bindings on render context
@@ -51,7 +62,9 @@ const myComponent = {
     }
   }
 }
-const vm = createApp(myComponent).mount(myComponent, '#app')
+
+const vm = createApp()
+vm.mount(App, '#app')
 
 // const component = Vue.setup()
 // component.increment()

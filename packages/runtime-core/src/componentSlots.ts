@@ -39,6 +39,7 @@ export function resolveSlots(
   instance: ComponentInternalInstance,
   children: NormalizedChildren
 ) {
+  debugger
   let slots: InternalSlots | void
   if (instance.vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
     const rawSlots = children as RawSlots

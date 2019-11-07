@@ -193,7 +193,7 @@ export function createRenderer<
   }
 
   function patch(
-    n1: HostVNode | null, // null means this is a mount
+    n1: HostVNode | null, // null means this is a mount // 没有 n1 意味着在mount
     n2: HostVNode,
     container: HostElement,
     anchor: HostNode | null = null,
@@ -202,6 +202,7 @@ export function createRenderer<
     isSVG: boolean = false,
     optimized: boolean = false
   ) {
+    debugger
     // patching & not same type, unmount old tree
     if (n1 != null && !isSameType(n1, n2)) {
       anchor = getNextHostNode(n1)
@@ -210,7 +211,9 @@ export function createRenderer<
     }
 
     const { type, shapeFlag } = n2
-    switch (type) {
+    switch (
+      type // 这里为什么不加类型
+    ) {
       case Text:
         processText(n1, n2, container, anchor)
         break
@@ -763,6 +766,7 @@ export function createRenderer<
     isSVG: boolean,
     optimized: boolean
   ) {
+    debugger
     if (n1 == null) {
       if (n2.shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE) {
         ;(parentComponent!.sink as KeepAliveSink).activate(
@@ -1591,6 +1595,7 @@ export function createRenderer<
       _vnode: HostVNode | null
     }
   > = (vnode, container) => {
+    debugger
     if (vnode == null) {
       if (container._vnode) {
         unmount(container._vnode, null, null, true)
@@ -1604,7 +1609,7 @@ export function createRenderer<
 
   return {
     render,
-    createApp: createAppAPI(render)
+    createApp: createAppAPI(render) /* 生成一个 Vue */
   }
 }
 

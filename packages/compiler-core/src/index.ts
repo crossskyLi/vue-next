@@ -25,6 +25,7 @@ export function baseCompile(
   options: CompilerOptions = {}
 ): CodegenResult {
   /* istanbul ignore if */
+  debugger
   if (__BROWSER__) {
     const onError = options.onError || defaultOnError
     if (options.prefixIdentifiers === true) {
