@@ -265,19 +265,30 @@ export function setupStatefulComponent(
   // 0. create render proxy property access cache
   instance.accessCache = {}
   // 1. create render proxy
+  // 生成 render Proxy
   instance.renderProxy = new Proxy(instance, PublicInstanceProxyHandlers)
   // 2. create props proxy
   // the propsProxy is a reactive AND readonly proxy to the actual props.
+  // propsProxy是对实际 props 的响应式只读代理。
   // it will be updated in resolveProps() on updates before render
   const propsProxy = (instance.propsProxy = readonlyProps(instance.props))
   // 3. call setup()
   const { setup } = Component
   if (setup) {
+    // 调起 Setup 方法, 如果它的参数不止一个 ,需要 使用createSetupContext
+    // 这里为什么要这么做呢??
     const setupContext = (instance.setupContext =
       setup.length > 1 ? createSetupContext(instance) : null)
 
     currentInstance = instance
     currentSuspense = parentSuspense
+    /**
+     *  fn: Function,
+     *  instance: ComponentInternalInstance | null,
+     *  type: ErrorTypes,
+     *  args?: unknown[]
+     */
+    // Vue 调用 setup 的时候,会把当前上下文 context 传进去 组件 的setup
     const setupResult = callWithErrorHandling(
       setup,
       instance,

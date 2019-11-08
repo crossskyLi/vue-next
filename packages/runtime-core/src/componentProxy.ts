@@ -69,6 +69,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     if (__RUNTIME_COMPILE__ && (key as any) === Symbol.unscopables) {
       return
     }
+    debugger
     const {
       renderContext,
       data,
@@ -139,6 +140,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
 
   set(target: ComponentInternalInstance, key: string, value: any): boolean {
     const { data, renderContext } = target
+    debugger
     if (data !== EMPTY_OBJ && hasOwn(data, key)) {
       data[key] = value
     } else if (hasOwn(renderContext, key)) {

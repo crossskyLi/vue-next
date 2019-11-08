@@ -103,6 +103,7 @@ type NormalizedPropsOptions = Record<string, NormalizedProp>
 // -其余:
 // -如果已经声明的 `props` : 声明 的放在‘props’里，其余放在‘attrs’里
 // -否则: 一切都变成 “props”
+// render 前会走这里
 
 export function resolveProps(
   instance: ComponentInternalInstance,

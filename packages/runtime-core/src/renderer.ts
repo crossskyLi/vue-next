@@ -861,6 +861,7 @@ export function createRenderer<
     resolveSlots(instance, initialVNode.children)
 
     // setup stateful logic
+    // setup  有状态的逻辑
     if (initialVNode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
       setupStatefulComponent(instance, parentSuspense)
     }

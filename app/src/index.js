@@ -33,7 +33,10 @@ const component = {
 
 const App = {
   template,
-  setup() {
+  setup(propsProxy, setupContext) {
+    // Vue 调用 setup 的时候,会把当前上下文 context 传进来
+    console.log(propsProxy, setupContext)
+    debugger
     // reactive state
     const count = ref(0)
     // const count = { value: 0 }
