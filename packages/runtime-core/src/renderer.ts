@@ -898,6 +898,7 @@ export function createRenderer<
     }
   }
 
+  /* 创建一个render 的effect */
   function setupRenderEffect(
     instance: ComponentInternalInstance,
     parentComponent: ComponentInternalInstance | null,

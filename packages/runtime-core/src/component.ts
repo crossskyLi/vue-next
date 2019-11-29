@@ -335,6 +335,7 @@ export function handleSetupResult(
     }
     // setup returned bindings.
     // assuming a render function compiled from template is present.
+    // 把 setup 的返回结果做响应
     instance.renderContext = reactive(setupResult)
   } else if (__DEV__ && setupResult !== undefined) {
     warn(
@@ -400,6 +401,7 @@ function finishComponentSetup(
         )
       }
     }
+    // 生成的render 函数 赋给 instance
     instance.render = (Component.render || NOOP) as RenderFunction
   }
 

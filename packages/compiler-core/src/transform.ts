@@ -320,11 +320,13 @@ export function traverseChildren(
   }
 }
 
+/* 递归遍历节点 */
 export function traverseNode(
   node: RootNode | TemplateChildNode,
   context: TransformContext
 ) {
   // apply transform plugins
+  // 装载要转换的插件
   const { nodeTransforms } = context
   const exitFns = []
   for (let i = 0; i < nodeTransforms.length; i++) {

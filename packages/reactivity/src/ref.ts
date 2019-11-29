@@ -9,7 +9,7 @@ export interface Ref<T = any> {
   _isRef: true
   value: UnwrapRef<T>
 }
-
+/* 转换, 如果是对象 就把他 reactive 响应式*/
 const convert = <T extends unknown>(val: T): T =>
   isObject(val) ? reactive(val) : val
 

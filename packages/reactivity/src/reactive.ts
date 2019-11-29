@@ -100,7 +100,7 @@ export function readonlyProps<T extends object>(
     readonlyCollectionHandlers
   )
 }
-
+/* 双向绑定 */
 function createReactiveObject(
   target: unknown,
   toProxy: WeakMap<any, any>,
@@ -127,6 +127,7 @@ function createReactiveObject(
   if (!canObserve(target)) {
     return target
   }
+  /* proxy */
   const handlers = collectionTypes.has(target.constructor)
     ? collectionHandlers
     : baseHandlers
