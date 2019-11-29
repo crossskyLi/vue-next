@@ -37,6 +37,6 @@
     "source-map": "^0.7.3"
   },
   "devDependencies": {
-    "postcss": "^7.0.21"
+    "@types/lru-cache": "^5.1.0"
   }
 }

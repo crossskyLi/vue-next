@@ -6,12 +6,15 @@ import {
   ElementNode,
   SourceLocation
 } from '@vue/compiler-core'
-import { RawSourceMap } from 'source-map'
+import { RawSourceMap, SourceMapGenerator } from 'source-map'
+import LRUCache from 'lru-cache'
+import { generateCodeFrame } from '@vue/shared'
 
 export interface SFCParseOptions {
   needMap?: boolean
   filename?: string
   sourceRoot?: string
+  pad?: 'line' | 'space'
 }
 
 export interface SFCBlock {
@@ -47,15 +50,22 @@ export interface SFCDescriptor {
   customBlocks: SFCBlock[]
 }
 
+const SFC_CACHE_MAX_SIZE = 500
+const sourceToSFC = new LRUCache<string, SFCDescriptor>(SFC_CACHE_MAX_SIZE)
 export function parse(
   source: string,
   {
     needMap = true,
     filename = 'component.vue',
-    sourceRoot = ''
+    sourceRoot = '',
+    pad = 'line'
   }: SFCParseOptions = {}
 ): SFCDescriptor {
-  // TODO check cache
+  const sourceKey = source + needMap + filename + sourceRoot
+  const cache = sourceToSFC.get(sourceKey)
+  if (cache) {
+    return cache
+  }
 
   const sfc: SFCDescriptor = {
     filename,
@@ -64,6 +74,7 @@ export function parse(
     styles: [],
     customBlocks: []
   }
+
   const ast = baseParse(source, {
     isNativeTag: () => true,
     getTextMode: () => TextModes.RAWTEXT
@@ -73,19 +84,23 @@ export function parse(
     if (node.type !== NodeTypes.ELEMENT) {
       return
     }
+    if (!node.children.length) {
+      return
+    }
+    // TODO handle pad option
     switch (node.tag) {
       case 'template':
         if (!sfc.template) {
           sfc.template = createBlock(node) as SFCTemplateBlock
         } else {
-          // TODO warn duplicate template
+          warnDuplicateBlock(source, filename, node)
         }
         break
       case 'script':
         if (!sfc.script) {
           sfc.script = createBlock(node) as SFCScriptBlock
         } else {
-          // TODO warn duplicate script
+          warnDuplicateBlock(source, filename, node)
         }
         break
       case 'style':
@@ -98,11 +113,50 @@ export function parse(
   })
 
   if (needMap) {
-    // TODO source map
+    if (sfc.script && !sfc.script.src) {
+      sfc.script.map = generateSourceMap(
+        filename,
+        source,
+        sfc.script.content,
+        sourceRoot,
+        pad
+      )
+    }
+    if (sfc.styles) {
+      sfc.styles.forEach(style => {
+        if (!style.src) {
+          style.map = generateSourceMap(
+            filename,
+            source,
+            style.content,
+            sourceRoot,
+            pad
+          )
+        }
+      })
+    }
   }
-  // TODO set cache
+  sourceToSFC.set(sourceKey, sfc)
 
   return sfc
+}
+
+function warnDuplicateBlock(
+  source: string,
+  filename: string,
+  node: ElementNode
+) {
+  const codeFrame = generateCodeFrame(
+    source,
+    node.loc.start.offset,
+    node.loc.end.offset
+  )
+  const location = `${filename}:${node.loc.start.line}:${node.loc.start.column}`
+  console.warn(
+    `Single file component can contain only one ${
+      node.tag
+    } element (${location}):\n\n${codeFrame}`
+  )
 }
 
 function createBlock(node: ElementNode): SFCBlock {
@@ -134,4 +188,45 @@ function createBlock(node: ElementNode): SFCBlock {
     }
   })
   return block
+}
+
+const splitRE = /\r?\n/g
+const emptyRE = /^(?:\/\/)?\s*$/
+
+function generateSourceMap(
+  filename: string,
+  source: string,
+  generated: string,
+  sourceRoot: string,
+  pad?: 'line' | 'space'
+): RawSourceMap {
+  const map = new SourceMapGenerator({
+    file: filename.replace(/\\/g, '/'),
+    sourceRoot: sourceRoot.replace(/\\/g, '/')
+  })
+  let offset = 0
+  if (!pad) {
+    offset =
+      source
+        .split(generated)
+        .shift()!
+        .split(splitRE).length - 1
+  }
+  map.setSourceContent(filename, source)
+  generated.split(splitRE).forEach((line, index) => {
+    if (!emptyRE.test(line)) {
+      map.addMapping({
+        source: filename,
+        original: {
+          line: index + 1 + offset,
+          column: 0
+        },
+        generated: {
+          line: index + 1,
+          column: 0
+        }
+      })
+    }
+  })
+  return JSON.parse(map.toString())
 }

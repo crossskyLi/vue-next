@@ -6,7 +6,8 @@ import {
   normalizeVNode,
   VNode,
   VNodeChildren,
-  createVNode
+  createVNode,
+  isSameVNodeType
 } from './vnode'
 import {
   ComponentInternalInstance,
@@ -51,7 +52,7 @@ import {
   SuspenseImpl
 } from './components/Suspense'
 import { ErrorCodes, callWithErrorHandling } from './errorHandling'
-import { KeepAliveSink } from './components/KeepAlive'
+import { KeepAliveSink, isKeepAlive } from './components/KeepAlive'
 
 export interface RendererOptions<HostNode = any, HostElement = any> {
   patchProp(
@@ -108,10 +109,18 @@ export interface RendererInternals<HostNode = any, HostElement = any> {
   move: (
     vnode: VNode<HostNode, HostElement>,
     container: HostElement,
-    anchor: HostNode | null
+    anchor: HostNode | null,
+    type: MoveType,
+    parentSuspense?: SuspenseBoundary<HostNode, HostElement> | null
   ) => void
   next: (vnode: VNode<HostNode, HostElement>) => HostNode | null
   options: RendererOptions<HostNode, HostElement>
+}
+
+export const enum MoveType {
+  ENTER,
+  LEAVE,
+  REORDER
 }
 
 const prodEffectOptions = {
@@ -126,10 +135,6 @@ function createDevEffectOptions(
     onTrack: instance.rtc ? e => invokeHooks(instance.rtc!, e) : void 0,
     onTrigger: instance.rtg ? e => invokeHooks(instance.rtg!, e) : void 0
   }
-}
-
-function isSameType(n1: VNode, n2: VNode): boolean {
-  return n1.type === n2.type && n1.key === n2.key
 }
 
 export function invokeHooks(hooks: Function[], arg?: DebuggerEvent) {
@@ -204,7 +209,7 @@ export function createRenderer<
   ) {
     debugger
     // patching & not same type, unmount old tree
-    if (n1 != null && !isSameType(n1, n2)) {
+    if (n1 != null && !isSameVNodeType(n1, n2)) {
       anchor = getNextHostNode(n1)
       unmount(n1, parentComponent, parentSuspense, true)
       n1 = null
@@ -363,7 +368,7 @@ export function createRenderer<
     const tag = vnode.type as string
     isSVG = isSVG || tag === 'svg'
     const el = (vnode.el = hostCreateElement(tag, isSVG))
-    const { props, shapeFlag } = vnode
+    const { props, shapeFlag, transition } = vnode
     if (props != null) {
       for (const key in props) {
         if (isReservedProp(key)) continue
@@ -386,10 +391,19 @@ export function createRenderer<
         optimized || vnode.dynamicChildren !== null
       )
     }
+    if (transition != null && !transition.persisted) {
+      transition.beforeEnter(el)
+    }
     hostInsert(el, container, anchor)
-    if (props != null && props.onVnodeMounted != null) {
+    const vnodeMountedHook = props && props.onVnodeMounted
+    if (
+      vnodeMountedHook != null ||
+      (transition != null && !transition.persisted)
+    ) {
       queuePostRenderEffect(() => {
-        invokeDirectiveHook(props.onVnodeMounted, parentComponent, vnode)
+        vnodeMountedHook &&
+          invokeDirectiveHook(vnodeMountedHook, parentComponent, vnode)
+        transition && !transition.persisted && transition.enter(el)
       }, parentSuspense)
     }
   }
@@ -603,8 +617,7 @@ export function createRenderer<
       }
       if (oldProps !== EMPTY_OBJ) {
         for (const key in oldProps) {
-          if (isReservedProp(key)) continue
-          if (!(key in newProps)) {
+          if (!isReservedProp(key) && !(key in newProps)) {
             hostPatchProp(
               el,
               key,
@@ -744,7 +757,12 @@ export function createRenderer<
             hostSetElementText(nextTarget, children as string)
           } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
             for (let i = 0; i < (children as HostVNode[]).length; i++) {
-              move((children as HostVNode[])[i], nextTarget, null)
+              move(
+                (children as HostVNode[])[i],
+                nextTarget,
+                null,
+                MoveType.REORDER
+              )
             }
           }
         } else if (__DEV__) {
@@ -849,7 +867,7 @@ export function createRenderer<
     const Comp = initialVNode.type as Component
 
     // inject renderer internals for keepAlive
-    if ((Comp as any).__isKeepAlive) {
+    if (isKeepAlive(initialVNode)) {
       const sink = instance.sink as KeepAliveSink
       sink.renderer = internals
       sink.parentSuspense = parentSuspense
@@ -885,7 +903,6 @@ export function createRenderer<
 
     setupRenderEffect(
       instance,
-      parentComponent,
       parentSuspense,
       initialVNode,
       container,
@@ -901,7 +918,6 @@ export function createRenderer<
   /* 创建一个render 的effect */
   function setupRenderEffect(
     instance: ComponentInternalInstance,
-    parentComponent: ComponentInternalInstance | null,
     parentSuspense: HostSuspenseBoundary | null,
     initialVNode: HostVNode,
     container: HostElement,
@@ -909,9 +925,8 @@ export function createRenderer<
     isSVG: boolean
   ) {
     // create reactive effect for rendering
-    let mounted = false
     instance.update = effect(function componentEffect() {
-      if (!mounted) {
+      if (!instance.isMounted) {
         const subTree = (instance.subTree = renderComponentRoot(instance))
         // beforeMount hook
         if (instance.bm !== null) {
@@ -930,7 +945,7 @@ export function createRenderer<
         ) {
           queuePostRenderEffect(instance.a, parentSuspense)
         }
-        mounted = true
+        instance.isMounted = true
       } else {
         // updateComponent
         // This is triggered by mutation of component's own state (next: null)
@@ -944,8 +959,9 @@ export function createRenderer<
         if (next !== null) {
           updateComponentPreRender(instance, next)
         }
+        const nextTree = renderComponentRoot(instance)
         const prevTree = instance.subTree
-        const nextTree = (instance.subTree = renderComponentRoot(instance))
+        instance.subTree = nextTree
         // beforeUpdate hook
         if (instance.bu !== null) {
           invokeHooks(instance.bu)
@@ -1174,7 +1190,7 @@ export function createRenderer<
       const n2 = optimized
         ? (c2[i] as HostVNode)
         : (c2[i] = normalizeVNode(c2[i]))
-      if (isSameType(n1, n2)) {
+      if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
           n2,
@@ -1199,7 +1215,7 @@ export function createRenderer<
       const n2 = optimized
         ? (c2[i] as HostVNode)
         : (c2[e2] = normalizeVNode(c2[e2]))
-      if (isSameType(n1, n2)) {
+      if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
           n2,
@@ -1315,7 +1331,7 @@ export function createRenderer<
           for (j = s2; j <= e2; j++) {
             if (
               newIndexToOldIndexMap[j - s2] === 0 &&
-              isSameType(prevChild, c2[j] as HostVNode)
+              isSameVNodeType(prevChild, c2[j] as HostVNode)
             ) {
               newIndex = j
               break
@@ -1375,7 +1391,7 @@ export function createRenderer<
           // There is no stable subsequence (e.g. a reverse)
           // OR current node is not among the stable sequence
           if (j < 0 || i !== increasingNewIndexSequence[j]) {
-            move(nextChild, container, anchor)
+            move(nextChild, container, anchor, MoveType.REORDER)
           } else {
             j--
           }
@@ -1387,25 +1403,55 @@ export function createRenderer<
   function move(
     vnode: HostVNode,
     container: HostElement,
-    anchor: HostNode | null
+    anchor: HostNode | null,
+    type: MoveType,
+    parentSuspense: HostSuspenseBoundary | null = null
   ) {
     if (vnode.shapeFlag & ShapeFlags.COMPONENT) {
-      move(vnode.component!.subTree, container, anchor)
+      move(vnode.component!.subTree, container, anchor, type)
       return
     }
     if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
-      vnode.suspense!.move(container, anchor)
+      vnode.suspense!.move(container, anchor, type)
       return
     }
     if (vnode.type === Fragment) {
       hostInsert(vnode.el!, container, anchor)
       const children = vnode.children as HostVNode[]
       for (let i = 0; i < children.length; i++) {
-        move(children[i], container, anchor)
+        move(children[i], container, anchor, type)
       }
       hostInsert(vnode.anchor!, container, anchor)
     } else {
-      hostInsert(vnode.el!, container, anchor)
+      // Plain element
+      const { el, transition, shapeFlag } = vnode
+      const needTransition =
+        type !== MoveType.REORDER &&
+        shapeFlag & ShapeFlags.ELEMENT &&
+        transition != null
+      if (needTransition) {
+        if (type === MoveType.ENTER) {
+          transition!.beforeEnter(el!)
+          hostInsert(el!, container, anchor)
+          queuePostRenderEffect(() => transition!.enter(el!), parentSuspense)
+        } else {
+          const { leave, delayLeave, afterLeave } = transition!
+          const remove = () => hostInsert(el!, container, anchor)
+          const performLeave = () => {
+            leave(el!, () => {
+              remove()
+              afterLeave && afterLeave()
+            })
+          }
+          if (delayLeave) {
+            delayLeave(el!, remove, performLeave)
+          } else {
+            performLeave()
+          }
+        }
+      } else {
+        hostInsert(el!, container, anchor)
+      }
     }
   }
 
@@ -1416,13 +1462,15 @@ export function createRenderer<
     doRemove?: boolean
   ) {
     const {
+      el,
       props,
       ref,
       type,
       children,
       dynamicChildren,
       shapeFlag,
-      anchor
+      anchor,
+      transition
     } = vnode
 
     // unset ref
@@ -1466,13 +1514,37 @@ export function createRenderer<
     }
 
     if (doRemove) {
-      hostRemove(vnode.el!)
-      if (anchor != null) hostRemove(anchor)
+      const remove = () => {
+        hostRemove(vnode.el!)
+        if (anchor != null) hostRemove(anchor)
+        if (
+          transition != null &&
+          !transition.persisted &&
+          transition.afterLeave
+        ) {
+          transition.afterLeave()
+        }
+      }
+      if (
+        vnode.shapeFlag & ShapeFlags.ELEMENT &&
+        transition != null &&
+        !transition.persisted
+      ) {
+        const { leave, delayLeave } = transition
+        const performLeave = () => leave(el!, remove)
+        if (delayLeave) {
+          delayLeave(vnode.el!, remove, performLeave)
+        } else {
+          performLeave()
+        }
+      } else {
+        remove()
+      }
     }
 
     if (props != null && props.onVnodeUnmounted != null) {
       queuePostRenderEffect(() => {
-        invokeDirectiveHook(props.onVnodeUnmounted, parentComponent, vnode)
+        invokeDirectiveHook(props.onVnodeUnmounted!, parentComponent, vnode)
       }, parentSuspense)
     }
   }
