@@ -1,5 +1,5 @@
 import { VNode, VNodeChild, isVNode } from './vnode'
-import { ReactiveEffect, reactive, readonlyProps } from '@vue/reactivity'
+import { ReactiveEffect, reactive, shallowReadonly } from '@vue/reactivity'
 import {
   PublicInstanceProxyHandlers,
   ComponentPublicInstance
@@ -274,7 +274,7 @@ export function setupStatefulComponent(
   // the propsProxy is a reactive AND readonly proxy to the actual props.
   // propsProxy是对实际 props 的响应式只读代理。
   // it will be updated in resolveProps() on updates before render
-  const propsProxy = (instance.propsProxy = readonlyProps(instance.props))
+  const propsProxy = (instance.propsProxy = shallowReadonly(instance.props))
   // 3. call setup()
   const { setup } = Component
   if (setup) {

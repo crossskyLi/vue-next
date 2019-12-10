@@ -1,19 +1,40 @@
 // This package is the "full-build" that includes both the runtime
 // and the compiler, and supports on-the-fly compilation of the template option.
 import { compile, CompilerOptions } from '@vue/compiler-dom'
-import { registerRuntimeCompiler, RenderFunction } from '@vue/runtime-dom'
-import * as runtimeDom from '@vue/runtime-dom' // 这里把 createApp 等暴露出去
+import { registerRuntimeCompiler, RenderFunction, warn } from '@vue/runtime-dom' // 这里把 createApp 等暴露出去
+import * as runtimeDom from '@vue/runtime-dom'
+import { isString, NOOP } from '@vue/shared'
+
+const idToTemplateCache = Object.create(null)
 
 function compileToFunction(
-  template: string,
+  template: string | HTMLElement,
   options?: CompilerOptions
 ): RenderFunction {
+  if (isString(template)) {
+    if (template[0] === '#') {
+      if (template in idToTemplateCache) {
+        template = idToTemplateCache[template]
+      } else {
+        const el = document.querySelector(template)
+        if (__DEV__ && !el) {
+          warn(`Template element not found or is empty: ${template}`)
+        }
+        template = idToTemplateCache[template] = el ? el.innerHTML : ``
+      }
+    }
+  } else if (template.nodeType) {
+    template = template.innerHTML
+  } else {
+    __DEV__ && warn(`invalid template option: `, template)
+    return NOOP
+  }
   // 进来先编译 原来的template 变成ast => node
   // 这里调用的是 compile-dom 的compile
   // compile-dom 对compile-core 做了一次二次封装，注入了一些用户参数和默认参数
-  debugger
-  let { code } = compile(template, {
+  const { code } = compile(template as string, {
     hoistStatic: true,
+    cacheHandlers: true,
     ...options
   })
   code = 'debugger;' + code

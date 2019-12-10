@@ -32,30 +32,33 @@ export interface TransitionProps extends BaseTransitionProps {
 
 // DOM Transition is a higher-order-component based on the platform-agnostic
 // base Transition component, with DOM-specific logic.
-export const Transition: FunctionalComponent = (
-  props: TransitionProps,
+export const Transition: FunctionalComponent<TransitionProps> = (
+  props,
   { slots }
 ) => h(BaseTransition, resolveTransitionProps(props), slots)
 
+export const TransitionPropsValidators = {
+  ...(BaseTransition as any).props,
+  name: String,
+  type: String,
+  css: {
+    type: Boolean,
+    default: true
+  },
+  duration: Object,
+  enterFromClass: String,
+  enterActiveClass: String,
+  enterToClass: String,
+  appearFromClass: String,
+  appearActiveClass: String,
+  appearToClass: String,
+  leaveFromClass: String,
+  leaveActiveClass: String,
+  leaveToClass: String
+}
+
 if (__DEV__) {
-  Transition.props = {
-    ...(BaseTransition as any).props,
-    name: String,
-    type: String,
-    // Cannot use Boolean otherwise it will be force casted to false when
-    // omitted
-    css: null,
-    duration: Object,
-    enterFromClass: String,
-    enterActiveClass: String,
-    enterToClass: String,
-    appearFromClass: String,
-    appearActiveClass: String,
-    appearToClass: String,
-    leaveFromClass: String,
-    leaveActiveClass: String,
-    leaveToClass: String
-  }
+  Transition.props = TransitionPropsValidators
 }
 
 export function resolveTransitionProps({
