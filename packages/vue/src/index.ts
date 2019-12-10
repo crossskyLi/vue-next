@@ -37,10 +37,10 @@ function compileToFunction(
     cacheHandlers: true,
     ...options
   })
-  code = 'debugger;' + code
+
   /* runtimeDom 这里指向前面生成 的Vue 实例 */
   const result = new Function('Vue', code)(runtimeDom) as RenderFunction
-  debugger
+
   return result
 }
 // 这里被 import 就会调用
