@@ -55,7 +55,7 @@ export interface ComponentOptionsBase<
     ctx: SetupContext
   ) => RawBindings | RenderFunction | void
   name?: string
-  template?: string
+  template?: string | object // can be a direct DOM node
   // Note: we are intentionally using the signature-less `Function` type here
   // since any type with signature will cause the whole inference to fail when
   // the return expression contains reference to `this`.
@@ -65,6 +65,11 @@ export interface ComponentOptionsBase<
   components?: Record<string, Component>
   directives?: Record<string, Directive>
   inheritAttrs?: boolean
+
+  // SFC & dev only
+  __scopeId?: string
+  __hmrId?: string
+  __hmrUpdated?: boolean
 
   // type-only differentiator to separate OptionWithoutProps from a constructor
   // type returned by createComponent() or FunctionalComponent
@@ -146,7 +151,6 @@ type ComponentInjectOptions =
       string | symbol | { from: string | symbol; default?: unknown }
     >
 
-// TODO type inference for these options
 export interface LegacyOptions<
   Props,
   RawBindings,
@@ -215,7 +219,7 @@ export function applyOptions(
     instance.renderContext === EMPTY_OBJ
       ? (instance.renderContext = reactive({}))
       : instance.renderContext
-  const ctx = instance.renderProxy!
+  const ctx = instance.proxy!
   const {
     // composition
     mixins,

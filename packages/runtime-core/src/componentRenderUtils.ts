@@ -34,7 +34,8 @@ export function renderComponentRoot(
   const {
     type: Component,
     vnode,
-    renderProxy,
+    proxy,
+    withProxy,
     props,
     slots,
     attrs,
@@ -48,7 +49,7 @@ export function renderComponentRoot(
   }
   try {
     if (vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
-      result = normalizeVNode(instance.render!.call(renderProxy))
+      result = normalizeVNode(instance.render!.call(withProxy || proxy))
     } else {
       // functional
       const render = Component as FunctionalComponent
@@ -110,10 +111,25 @@ export function renderComponentRoot(
 export function shouldUpdateComponent(
   prevVNode: VNode,
   nextVNode: VNode,
+  parentComponent: ComponentInternalInstance | null,
   optimized?: boolean
 ): boolean {
   const { props: prevProps, children: prevChildren } = prevVNode
   const { props: nextProps, children: nextChildren, patchFlag } = nextVNode
+
+  // Parent component's render function was hot-updated. Since this may have
+  // caused the child component's slots content to have changed, we need to
+  // force the child to update as well.
+  if (
+    __BUNDLER__ &&
+    __DEV__ &&
+    (prevChildren || nextChildren) &&
+    parentComponent &&
+    parentComponent.renderUpdated
+  ) {
+    return true
+  }
+
   if (patchFlag > 0) {
     if (patchFlag & PatchFlags.DYNAMIC_SLOTS) {
       // slot content that references values that might have changed,

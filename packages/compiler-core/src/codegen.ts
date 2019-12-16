@@ -1,3 +1,4 @@
+import { CodegenOptions } from './options'
 import {
   RootNode,
   TemplateChildNode,
@@ -9,7 +10,6 @@ import {
   CallExpression,
   ArrayExpression,
   ObjectExpression,
-  SourceLocation,
   Position,
   InterpolationNode,
   CompoundExpressionNode,
@@ -17,7 +17,8 @@ import {
   FunctionExpression,
   SequenceExpression,
   ConditionalExpression,
-  CacheExpression
+  CacheExpression,
+  locStub
 } from './ast'
 import { SourceMapGenerator, RawSourceMap } from 'source-map'
 import {
@@ -38,30 +39,9 @@ import {
   CREATE_COMMENT,
   CREATE_TEXT
 } from './runtimeHelpers'
-import { ImportsOption } from './transform'
+import { ImportItem } from './transform'
 
 type CodegenNode = TemplateChildNode | JSChildNode
-
-export interface CodegenOptions {
-  // - Module mode will generate ES module import statements for helpers
-  //   and export the render function as the default export.
-  // - Function mode will generate a single `const { helpers... } = Vue`
-  //   statement and return the render function. It is meant to be used with
-  //   `new Function(code)()` to generate a render function at runtime.
-  // Default: 'function'
-  mode?: 'module' | 'function'
-  // Prefix suitable identifiers with _ctx.
-  // If this option is false, the generated code will be wrapped in a
-  // `with (this) { ... }` block.
-  // Default: false
-  prefixIdentifiers?: boolean
-  // Generate source map?
-  // Default: false
-  sourceMap?: boolean
-  // Filename for source map generation.
-  // Default: `template.vue.html`
-  filename?: string
-}
 
 export interface CodegenResult {
   code: string
@@ -78,8 +58,7 @@ export interface CodegenContext extends Required<CodegenOptions> {
   indentLevel: number
   map?: SourceMapGenerator
   helper(key: symbol): string
-  push(code: string, node?: CodegenNode, openOnly?: boolean): void
-  resetMapping(loc: SourceLocation): void
+  push(code: string, node?: CodegenNode): void
   indent(): void
   deindent(withoutNewLine?: boolean): void
   newline(): void
@@ -105,18 +84,12 @@ function createCodegenContext(
     line: 1,
     offset: 0,
     indentLevel: 0,
-
-    // lazy require source-map implementation, only in non-browser builds!
-    map:
-      __BROWSER__ || !sourceMap
-        ? undefined
-        : new (loadDep('source-map')).SourceMapGenerator(),
-
+    map: undefined,
     helper(key) {
       const name = helperNameMap[key]
       return prefixIdentifiers ? name : `_${name}`
     },
-    push(code, node, openOnly) {
+    push(code, node) {
       context.code += code
       if (!__BROWSER__ && context.map) {
         if (node) {
@@ -130,14 +103,9 @@ function createCodegenContext(
           addMapping(node.loc.start, name)
         }
         advancePositionWithMutation(context, code)
-        if (node && !openOnly) {
+        if (node && node.loc !== locStub) {
           addMapping(node.loc.end)
         }
-      }
-    },
-    resetMapping(loc: SourceLocation) {
-      if (!__BROWSER__ && context.map) {
-        addMapping(loc.start)
       }
     },
     indent() {
@@ -174,9 +142,12 @@ function createCodegenContext(
     })
   }
 
-  if (!__BROWSER__ && context.map) {
-    context.map.setSourceContent(filename, context.source)
+  if (!__BROWSER__ && sourceMap) {
+    // lazy require source-map implementation, only in non-browser builds
+    context.map = new (loadDep('source-map')).SourceMapGenerator()
+    context.map!.setSourceContent(filename, context.source)
   }
+
   return context
 }
 
@@ -299,7 +270,8 @@ export function generate(
   return {
     ast,
     code: context.code,
-    map: context.map ? context.map.toJSON() : undefined
+    // SourceMapGenerator does have toJSON() method but it's not in the types
+    map: context.map ? (context.map as any).toJSON() : undefined
   }
 }
 
@@ -332,7 +304,7 @@ function genHoists(hoists: JSChildNode[], context: CodegenContext) {
   })
 }
 
-function genImports(importsOptions: ImportsOption[], context: CodegenContext) {
+function genImports(importsOptions: ImportItem[], context: CodegenContext) {
   if (!importsOptions.length) {
     return
   }
@@ -530,13 +502,13 @@ function genCallExpression(node: CallExpression, context: CodegenContext) {
   const callee = isString(node.callee)
     ? node.callee
     : context.helper(node.callee)
-  context.push(callee + `(`, node, true)
+  context.push(callee + `(`, node)
   genNodeList(node.arguments, context)
   context.push(`)`)
 }
 
 function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
-  const { push, indent, deindent, newline, resetMapping } = context
+  const { push, indent, deindent, newline } = context
   const { properties } = node
   if (!properties.length) {
     push(`{}`, node)
@@ -549,8 +521,7 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
   push(multilines ? `{` : `{ `)
   multilines && indent()
   for (let i = 0; i < properties.length; i++) {
-    const { key, value, loc } = properties[i]
-    resetMapping(loc) // reset source mapping for every property.
+    const { key, value } = properties[i]
     // key
     genExpressionAsPropertyKey(key, context)
     push(`: `)

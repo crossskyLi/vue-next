@@ -11,8 +11,8 @@ import LRUCache from 'lru-cache'
 import { generateCodeFrame } from '@vue/shared'
 
 export interface SFCParseOptions {
-  needMap?: boolean
   filename?: string
+  sourceMap?: boolean
   sourceRoot?: string
   pad?: boolean | 'line' | 'space'
 }
@@ -55,13 +55,13 @@ const sourceToSFC = new LRUCache<string, SFCDescriptor>(SFC_CACHE_MAX_SIZE)
 export function parse(
   source: string,
   {
-    needMap = true,
+    sourceMap = true,
     filename = 'component.vue',
     sourceRoot = '',
-    pad = 'line'
+    pad = false
   }: SFCParseOptions = {}
 ): SFCDescriptor {
-  const sourceKey = source + needMap + filename + sourceRoot + pad
+  const sourceKey = source + sourceMap + filename + sourceRoot + pad
   const cache = sourceToSFC.get(sourceKey)
   if (cache) {
     return cache
@@ -111,29 +111,21 @@ export function parse(
     }
   })
 
-  if (needMap) {
-    if (sfc.script && !sfc.script.src) {
-      sfc.script.map = generateSourceMap(
-        filename,
-        source,
-        sfc.script.content,
-        sourceRoot,
-        pad
-      )
+  if (sourceMap) {
+    const genMap = (block: SFCBlock | null) => {
+      if (block && !block.src) {
+        block.map = generateSourceMap(
+          filename,
+          source,
+          block.content,
+          sourceRoot,
+          pad ? 0 : block.loc.start.line - 1
+        )
+      }
     }
-    if (sfc.styles) {
-      sfc.styles.forEach(style => {
-        if (!style.src) {
-          style.map = generateSourceMap(
-            filename,
-            source,
-            style.content,
-            sourceRoot,
-            pad
-          )
-        }
-      })
-    }
+    genMap(sfc.template)
+    genMap(sfc.script)
+    sfc.styles.forEach(genMap)
   }
   sourceToSFC.set(sourceKey, sfc)
 
@@ -205,27 +197,19 @@ function generateSourceMap(
   source: string,
   generated: string,
   sourceRoot: string,
-  pad?: SFCParseOptions['pad']
+  lineOffset: number
 ): RawSourceMap {
   const map = new SourceMapGenerator({
     file: filename.replace(/\\/g, '/'),
     sourceRoot: sourceRoot.replace(/\\/g, '/')
   })
-  let offset = 0
-  if (!pad) {
-    offset =
-      source
-        .split(generated)
-        .shift()!
-        .split(splitRE).length - 1
-  }
   map.setSourceContent(filename, source)
   generated.split(splitRE).forEach((line, index) => {
     if (!emptyRE.test(line)) {
       map.addMapping({
         source: filename,
         original: {
-          line: index + 1 + offset,
+          line: index + 1 + lineOffset,
           column: 0
         },
         generated: {

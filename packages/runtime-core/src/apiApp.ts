@@ -182,7 +182,7 @@ export function createAppAPI<HostNode, HostElement>(
 
           render(vnode, rootContainer)
           isMounted = true
-          return vnode.component!.renderProxy
+          return vnode.component!.proxy
         } else if (__DEV__) {
           warn(
             `App has already been mounted. Create a new app instance instead.`
